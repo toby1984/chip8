@@ -1,0 +1,310 @@
+/**
+ * Copyright 2012 Tobias Gierke <tobias.gierke@code-sourcery.de>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package de.codesourcery.chip8;
+
+public class Disassembler
+{
+    private static final StringBuffer buffer = new StringBuffer();
+
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
+
+    private static void wordToHex(int value)
+    {
+        byteToHex( (value & 0xff00)>>>8 );
+        byteToHex( value & 0xff );
+    }
+
+    private static void byteToHex(int value)
+    {
+        char hi = HEX[ (value & 0xf0)>>>4];
+        char low = HEX[ value & 0x0f];
+        buffer.append(hi).append(low);
+    }
+
+    public static String disAsm(Memory memory, int startAddress, int words)
+    {
+        buffer.setLength( 0 );
+        int pc = startAddress;
+        for ( int i = 0 ; i < words ; i++ )
+        {
+            if ( i > 0 )
+            {
+                buffer.append("\n");
+            }
+            wordToHex( pc );
+            buffer.append(": ");
+            disassembleInstruction(memory,pc);
+            buffer.append(" ; ");
+            byteToHex( memory.read(pc) );
+            byteToHex( memory.read(pc+1) );
+            pc += 2;
+        }
+        return buffer.toString();
+    }
+
+    private static void disassembleInstruction(Memory memory,final int pc)
+    {
+        final int cmd = memory.read( pc );
+        final int data = memory.read( pc+1 );
+        if ( cmd == 0x00 )
+        {
+            if ( (data & 0xf0) == 0xc0 )
+            {
+                // 0x00Cx 	scdown x 	Scroll the screen down x lines 	Super only, not implemented
+                buffer.append("scdown ");
+                byteToHex( data & 0x0f );
+            }
+            else if ( data == 0xe0 )
+            {
+                // 0x00E0 	cls 	Clear the screen
+                buffer.append("cls");
+            }
+            else if ( data == 0xee )
+            {
+                // 0x00EE 	rts 	return from subroutine call
+                buffer.append("rts");
+            }
+            else if ( data == 0xfb )
+            {
+                // 0x00FB 	scright 	scroll screen 4 pixels right 	Super only,not implemented
+                buffer.append("scright");
+            }
+            else if ( data == 0xfc )
+            {
+                // 0x00FC 	scleft 	scroll screen 4 pixels left 	Super only,not implemented
+                buffer.append("scleft");
+            }
+            else if ( data == 0xfe )
+            {
+                // 0x00FE 	low 	disable extended screen mode 	Super only
+                buffer.append("low");
+            }
+            else if ( data == 0xff )
+            {
+                // 0x00FF 	high 	enable extended screen mode (128 x 64) 	Super only
+                buffer.append("high");
+            } else {
+                illegalInstruction();
+            }
+        }
+        else if ( (cmd & 0xf0) == 0x10 )
+        {
+            // 0x1xxx 	jmp xxx 	jump to address
+            buffer.append("jmp 0x");
+            wordToHex( (cmd & 0x0f)<<8|(data& 0xff) );
+        }
+        else if ( (cmd & 0xf0) == 0x20 ) {
+            // 0x2xxx 	jsr xxx 	jump to subroutine at address xxx 	16 levels maximum
+            buffer.append("jsr 0x");
+            wordToHex((cmd & 0x0f)<<8|(data& 0xff) );
+        }
+        else if ( (cmd & 0xf0) == 0x30 ) {
+            // 0x3rxx 	skeq vr,xx 	skip if register r = constant
+            int r0 = cmd & 0x0f;
+            int cnst = data & 0xff;
+            buffer.append("skeq ");
+            buffer.append("v"+r0).append(", 0x");
+            byteToHex( cnst );
+        }
+        else if ( (cmd & 0xf0) == 0x40 ) {
+            // 0x4rxx 	skne vr,xx 	skip if register r <> constant
+            int r0 = cmd & 0x0f;
+            int cnst = data & 0xff;
+            buffer.append("skne ");
+            buffer.append( "v" ).append( r0 ).append(", 0x");
+            byteToHex( cnst );
+        }
+        else if ( (cmd & 0xf0) == 0x50 )
+        {
+            // 0x5ry0 	skeq vr,vy 	skip if register r = register y
+            int r0 = cmd & 0x0f;
+            int r1 = (data & 0xf0)>>>4;
+            buffer.append("skeq v").append(r0).append(", v").append(r1);
+        }
+        else if ( (cmd & 0xf0) == 0x60 ) {
+            // 0x6rxx 	mov vr,xx 	move constant to register r
+            int r0 = cmd & 0x0f;
+            int cnst = data & 0xff;
+            buffer.append("mov v").append(r0).append(", 0x");
+            byteToHex( cnst );
+        }
+        else if ( (cmd & 0xf0) == 0x70 ) {
+            // 0x7rxx 	add vr,xx 	add constant to register r 	No carry generated
+            int r0 = cmd & 0x0f;
+            int cnst = data & 0xff;
+            buffer.append("add v").append(r0).append(", 0x");
+            byteToHex( cnst );
+        }
+        else if ( (cmd & 0xf0) == 0x80 ) {
+            int dst = cmd & 0x0f;
+            int src = (data & 0xf0)>>>4;
+            switch( data & 0x0f ) {
+                case 0x00:
+                    // 0x8ry0 	mov vr,vy 	move register vy into vr
+                    buffer.append("mov v").append(dst).append(",v").append(src);
+                    break;
+                case 0x01:
+                    // 0x8ry1 	or rx,ry 	or register vy into register vr
+                    buffer.append("or v").append(dst).append(",v").append(src);
+                    break;
+                case 0x02:
+                    // 0x8ry2 	and rx,ry 	and register vy into register vx
+                    buffer.append("and v").append(dst).append(",v").append(src);
+                    break;
+                case 0x03:
+                    // 0x8ry3 	xor rx,ry 	exclusive or register ry into register rx
+                    buffer.append("xor v").append(dst).append(",v").append(src);
+                    break;
+                case 0x04:
+                    // 0x8ry4 	add vr,vy 	add register vy to vr,carry in vf
+                    buffer.append("add v").append(dst).append(",v").append(src);
+                    break;
+                case 0x05:
+                    // 0x8ry5 	sub vr,vy 	subtract register vy from vr,borrow in vf
+                    // vf set to 1 if borrows
+                    buffer.append("sub v").append(dst).append(",v").append(src);
+                    break;
+                case 0x06:
+                    // 0x8r06 	shr vr 	shift register vy right, bit 0 goes into register vf
+                    buffer.append("shr v").append(dst);
+                    break;
+                case 0x07:
+                    /*
+                     * 8xy7 - SUBN Vx, Vy
+                     * Set Vx = Vy - Vx, set VF = NOT borrow.
+                     * If Vy > Vx, then VF is set to 1, otherwise 0.
+                     * Then Vx is subtracted from Vy, and the results stored in Vx.
+                     */
+                    buffer.append("subn v").append(src).append(",v").append(dst);
+                    break;
+                case 0x0e:
+                    // 0x8r0e 	shl vr 	shift register vr left,bit 7 goes into register vf
+                    buffer.append("shl v").append(dst);
+                    break;
+                default:
+                    throw new RuntimeException("Unhandled opcode: 0x"+Integer.toHexString(cmd<<8|data) );
+            }
+        }
+        else if ( (cmd & 0xf0) == 0x90 ) {
+            // 0x9ry0 	skne rx,ry 	skip if register rx <> register ry
+            int r0 = cmd & 0x0f;
+            int r1 = (data & 0xf0)>>>4;
+            buffer.append("skne v").append(r0).append(",v").append(r1);
+        }
+        else if ( (cmd & 0xf0) == 0xa0 ) {
+            // 0xaxxx 	mvi xxx 	Load index register with constant xxx
+            int index = (cmd & 0x0f)<<8 | (data & 0xff);
+            buffer.append("mvi ");
+            wordToHex( index );
+        }
+        else if ( (cmd & 0xf0) == 0xb0 ) {
+            // 0xbxxx 	jmi xxx 	Jump to address xxx+register v0
+            int adr = (cmd & 0x0f)<<8 | (data & 0xff);
+            buffer.append("jmi ");
+            wordToHex( adr );
+        }
+        else if ( (cmd & 0xf0) == 0xc0 ) {
+            // 0xcrxx 	rand vr,xxx    	vr = random number less than or equal to xxx
+            buffer.append("rand v").append(cmd&0x0f).append(",");
+            byteToHex(data&0xff);
+        }
+        else if ( (cmd & 0xf0) == 0xd0 )
+        {
+            int x = cmd & 0x0f;
+            int y = (data & 0xf0)>>>4;
+            int height = (data & 0x0f);
+            if ( height != 0x00 )
+            {
+                buffer.append("sprite ").append(x).append(",")
+                        .append(y).append(",").append(height);
+            }
+            else
+            {
+                // 0xdry0 	xsprite rx,ry 	Draws extended sprite at screen location rx,ry
+                // As above,but sprite is always 16 x 16. Superchip only, not yet implemented
+                buffer.append("xsprite ").append(x).append(",").append(y);
+            }
+        }
+        else if ( (cmd & 0xf0) == 0xe0 )
+        {
+            int key = cmd & 0x0f;
+            if ( data == 0x9e )
+            {
+                // 0xek9e 	skpr k 	skip if key (register rk) pressed
+                // The key is a key number, see the chip-8 documentation
+                buffer.append("skpr ").append( key );
+            }
+            else if ( data == 0xa1 )
+            {
+                // 0xeka1 	skup k 	skip if key (register rk) not pressed
+                buffer.append("skup ").append( key );
+            } else {
+                illegalInstruction();
+            }
+        }
+        else if ( (cmd & 0xf0) == 0xf0 )
+        {
+            int r0 = (cmd & 0x0f);
+            switch( data )
+            {
+                case 0x07:   // 0xfr07	gdelay vr 	get delay timer into vr
+                    buffer.append("gdelay v").append(r0);
+                    break;
+                case 0x0a:   // 0xfr0a	key vr wait for keypress,put key in register vr
+                    buffer.append("key v").append(r0);
+                    break;
+                case 0x15:   // 0xfr15	sdelay vr 	set the delay timer to vr
+                    buffer.append("sdelay v").append(r0);
+                    break;
+                case 0x18:   // 0xfr18	ssound vr 	set the sound timer to vr
+                    buffer.append("ssound v").append(r0);
+                    break;
+                case 0x1e:   // 0xfr1e	adi vr add register vr to the index register
+                    buffer.append("adi v").append(r0);
+                    break;
+                case 0x29:   // 0xfr29	font vr 	point I to the sprite for hexadecimal character in vr
+                    // Sprite is 5 bytes high
+                    buffer.append("font v").append(r0);
+                    break;
+                case 0x30:   // 0xfr30	xfont vr 	point I to the sprite for hexadecimal character in vr
+                    // Sprite is 10 bytes high,Super only
+                    buffer.append("xfont v").append(r0);
+                    break;
+                case 0x33:   // 0xfr33	bcd vr 	store the bcd representation of register vr at
+                    // // location I,I+1,I+2
+                    // Doesn't change I
+                    buffer.append("bcd v").append(r0);
+                    break;
+                case 0x55:   // 0xfr55	str v0-vr 	store registers v0-vr at location I onwards
+                    // I is incremented to point to the next location on. e.g. I = I + r + 1
+                    buffer.append("str v0-v").append(r0);
+                    break;
+                case 0x65:   // 0xfx65	ldr v0-vr 	load registers v0-vr from location I onwards as above.
+                    buffer.append("ldr v0-v").append(r0);
+                    break;
+                default:
+                    illegalInstruction();
+            }
+        } else {
+            illegalInstruction();
+        }
+    }
+
+    private static void illegalInstruction()
+    {
+        buffer.append("illegal");
+    }
+}
