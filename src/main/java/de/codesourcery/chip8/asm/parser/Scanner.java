@@ -1,4 +1,4 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.parser;
 
 public final class Scanner
 {
@@ -7,6 +7,10 @@ public final class Scanner
 
     public Scanner(String input) {
         this.input = input;
+    }
+
+    public String getText() {
+        return input;
     }
 
     private void assertNotEOF()

@@ -200,7 +200,8 @@ public class Screen
             for ( int currentX = x, bit = 0 ; bit < 8 ;
                   bit++,
                   mask >>>= 1,
-                  currentX = (currentX+1) % mode.width() )
+                  currentX = (currentX+1) % mode.width()
+            )
             {
                 final boolean spriteBit = (data & mask)!=0;
                 final boolean screenBit = readPixel(currentX,currentY);
@@ -217,23 +218,40 @@ public class Screen
         return pixelsCleared;
     }
 
+    public void dumpScreen()
+    {
+        for ( int y = 0 ; y < mode.height() ; y++ )
+        {
+            for (int x = 0; x < mode.width(); x++)
+            {
+                if ( readPixel( x,y ) ) {
+                    System.out.print("#");
+                } else {
+                    System.out.print(".");
+                }
+            }
+            System.out.println();
+        }
+    }
+
     public boolean readPixel(int x,int y) {
         int byteOffset = getBytesPerRow()*y + (x/8);
-        int bitOffset = x - (x/8);
+        int bitOffset = x - (x/8)*8;
         int mask = 0b1000_0000 >>> bitOffset;
         return (data[ byteOffset ] & mask) != 0;
     }
 
     private void setPixel(int x,int y) {
         int byteOffset = getBytesPerRow()*y + (x/8);
-        int bitOffset = x - (x/8);
+        int bitOffset = x - (x/8)*8;
         int mask = 0b1000_0000 >>> bitOffset;
         data[ byteOffset ] |= mask;
     }
 
-    private void clearPixel(int x,int y) {
+    private void clearPixel(int x,int y)
+    {
         int byteOffset = getBytesPerRow()*y + (x/8);
-        int bitOffset = x - (x/8);
+        int bitOffset = x - (x/8)*8;
         int mask = 0b1000_0000 >>> bitOffset;
         data[ byteOffset ] &= ~mask;
     }

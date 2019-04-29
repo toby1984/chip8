@@ -1,4 +1,16 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.parser;
+
+import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.asm.Identifier;
+import de.codesourcery.chip8.asm.SymbolTable;
+import de.codesourcery.chip8.asm.ast.ASTNode;
+import de.codesourcery.chip8.asm.ast.CommentNode;
+import de.codesourcery.chip8.asm.ast.InstructionNode;
+import de.codesourcery.chip8.asm.ast.LabelNode;
+import de.codesourcery.chip8.asm.ast.NumberNode;
+import de.codesourcery.chip8.asm.ast.RegisterNode;
+import de.codesourcery.chip8.asm.ast.TextNode;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -17,12 +29,66 @@ public class Parser
 
     public ASTNode parse() {
 
+        try {
+            return internalParse();
+        }
+        catch(RuntimeException e)
+        {
+            printError( e.getMessage(), lexer.peek().offset );
+            throw e;
+        }
+    }
+
+    private void printError(String msg,int offset)
+    {
+        final String text = lexer.getScanner().getText();
+        final String[] lines = text.split("\n");
+        int lineStartOffset = 0;
+        int lineNo = 1;
+        for ( String line : lines )
+        {
+            final int lineEnd = lineStartOffset + line.length();
+//            System.err.println("Line "+lineNo+" ("+lineStartOffset+" - "+lineEnd+"): "+line);
+            if ( lineStartOffset <= offset && offset <= lineEnd )
+            {
+                int regionStart = Math.max( lineStartOffset, offset-10);
+                int regionEnd = Math.min( lineEnd, offset+10);
+                final String errLine =
+                        line.substring( regionStart-lineStartOffset, regionEnd-lineStartOffset );
+                final int col = offset - lineStartOffset;
+                System.err.println( "Error at line "+lineNo+", column "+col);
+                System.err.println( errLine );
+                final int indent = offset - regionStart;
+                System.err.println( StringUtils.repeat(' ',indent)+"^ "+msg);
+                return;
+            }
+            lineStartOffset = lineEnd+1;
+            lineNo++;
+        }
+        if ( lines.length > 0 && offset == lineStartOffset)
+        {
+            final int col = offset - lineStartOffset;
+            System.err.println( "Error at line "+lineNo+", column "+col);
+            System.err.println( lines[lines.length - 1] );
+        }
+        else
+        {
+            System.err.println( "Failed to find src line for offset " + offset );
+        }
+        System.err.println("ERROR: "+msg);
+    }
+
+    private ASTNode internalParse() {
+
         ast = new ASTNode();
 
         while ( ! lexer.eof() )
         {
             while ( lexer.peek().is(TokenType.NEWLINE) ) {
                 lexer.next();
+            }
+            if ( lexer.eof() ) {
+                break;
             }
             ASTNode stmt = parseStatement();
             if ( stmt == null )
@@ -95,7 +161,7 @@ public class Parser
                     throw new RuntimeException("Expected operand after comma @ "+lexer.peek().offset);
                 }
                 if ( insn.getInstruction() == null ) {
-                    throw new RuntimeException("Unknown instruction @ "+lexer.peek().offset);
+                    throw new RuntimeException("Unknown instruction @ "+tok.offset);
                 }
                 return insn;
             }
@@ -108,8 +174,6 @@ public class Parser
         Token tok = lexer.peek();
         switch( tok.type )
         {
-            case TEXT:
-                return new TextNode( lexer.next().value );
             case HEX_NUMBER:
             case DECIMAL_NUMBER:
             case BINARY_NUMBER:
@@ -132,16 +196,42 @@ public class Parser
             case REGISTER:
                 final int regNum = Integer.parseInt( lexer.next().value.substring( 1 ) );
                 return new RegisterNode( regNum );
-        }
-        if ( tok.is(TokenType.REGISTER ) )
-        {
-            final int regNum = Integer.parseInt( lexer.next().value.substring( 1 ) );
-            return new RegisterNode( regNum );
-        }
-        else if ( tok.is(TokenType.TEXT ) )
-        {
-            final String value = lexer.next().value;
-            return Identifier.isValid( value ) ? new LabelReferenceNode( new Identifier(value) ) : new TextNode( value );
+            case TEXT:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                return new TextNode( lexer.next().value );
         }
         return null;
     }
@@ -175,8 +265,8 @@ public class Parser
         NIBBLE,// 4-bit value
         BYTE,// 8-bit value
         ADDRESS, // 12-bit value
-        KEYCODE, // 0-15
         // -- literals
+        PRESSED_KEY, // literal 'K'
         INDEX, // literal 'I'
         DELAY_TIMER, //  literal 'DT'
         FONT,// literal 'F'
@@ -188,7 +278,14 @@ public class Parser
         {
             if ( node instanceof TextNode )
             {
+                if ( this == ADDRESS ) {
+                    // we'll assume this is actually an identifier
+                    // and the symbol table lookup will succeed
+                    return true;
+                }
                 switch( ((TextNode) node).value.toLowerCase() ) {
+                    case "k":
+                        return this == PRESSED_KEY;
                     case "i":
                         return this == INDEX;
                     case "dt":
@@ -214,7 +311,7 @@ public class Parser
             if ( node instanceof NumberNode )
             {
                 final int value = ((NumberNode) node).value;
-                if ( this == NIBBLE || this == KEYCODE ) {
+                if ( this == NIBBLE ) {
                     return value >= 0 && value <= 15;
                 }
                 if ( this == BYTE) {
@@ -234,14 +331,14 @@ public class Parser
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
-                context.write( 0x00e0 );
+                context.writeWord( this,0x00e0 );
             }
         },
         RET("ret") {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
-                context.write( 0x00ee );
+                context.writeWord( this, 0x00ee );
             }
         },
         JP("jp",OperandType.ADDRESS)
@@ -249,14 +346,14 @@ public class Parser
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
-                context.write( 0x1000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) ) );
+                context.writeWord( this, 0x1000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) ) );
             }
         },
         CALL("call",OperandType.ADDRESS) {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
-                context.write( 0x2000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) ) );
+                context.writeWord( this,0x2000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) ) );
             }
         },
         SE("se",OperandType.REGISTER,OperandType.BYTE) {
@@ -266,7 +363,7 @@ public class Parser
                 // 3xkk - SE Vx, byte
                 int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x3000 | regNo << 8 | cnst );
+                context.writeWord(this, 0x3000 | regNo << 8 | cnst );
             }
         },
         SNE("SNE",OperandType.REGISTER,OperandType.BYTE) {
@@ -276,7 +373,7 @@ public class Parser
                 // 4xkk - SE Vx, byte
                 int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x4000 | regNo << 8 | cnst );
+                context.writeWord(this, 0x4000 | regNo << 8 | cnst );
             }
         },
         SE2("SE",OperandType.REGISTER,OperandType.REGISTER) {
@@ -286,7 +383,7 @@ public class Parser
                 // 5xy0 - SE Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x5000 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x5000 | regNo0 << 8 | regNo1 << 4);
             }
         },
         LD("LD",OperandType.REGISTER,OperandType.BYTE) {
@@ -296,7 +393,7 @@ public class Parser
                 // 6xkk - LD Vx, byte
                 int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x6000 | regNo << 8 | cnst );
+                context.writeWord(this, 0x6000 | regNo << 8 | cnst );
             }
         },
         ADD("ADD",OperandType.REGISTER,OperandType.BYTE) {
@@ -306,7 +403,7 @@ public class Parser
                 // 7xkk - ADD Vx, byte
                 int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x7000 | regNo << 8 | cnst );
+                context.writeWord(this, 0x7000 | regNo << 8 | cnst );
             }
         },
         LD2("LD",OperandType.REGISTER,OperandType.REGISTER) {
@@ -316,7 +413,7 @@ public class Parser
                 // 8xy0 - LD Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x8000 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x8000 | regNo0 << 8 | regNo1 << 4);
             }
         },
         OR("OR",OperandType.REGISTER,OperandType.REGISTER) {
@@ -326,7 +423,7 @@ public class Parser
                 // 8xy1 - OR Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x8001 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x8001 | regNo0 << 8 | regNo1 << 4);
             }
         },
         AND("AND",OperandType.REGISTER,OperandType.REGISTER) {
@@ -336,7 +433,7 @@ public class Parser
                 // 8xy2 - AND Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x8002 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x8002 | regNo0 << 8 | regNo1 << 4);
             }
         },
         XOR("XOR",OperandType.REGISTER,OperandType.REGISTER) {
@@ -346,7 +443,7 @@ public class Parser
                 // 8xy3 - XOR Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x8003 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x8003 | regNo0 << 8 | regNo1 << 4);
             }
         },
         ADD2("ADD",OperandType.REGISTER,OperandType.REGISTER) {
@@ -356,7 +453,7 @@ public class Parser
                 // 8xy4 - ADD Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x8004 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x8004 | regNo0 << 8 | regNo1 << 4);
             }
         },
         SUB("SUB",OperandType.REGISTER,OperandType.REGISTER) {
@@ -366,7 +463,7 @@ public class Parser
                 // 8xy5 - SUB Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x8005 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x8005 | regNo0 << 8 | regNo1 << 4);
             }
         },
         SHR("SHR",OperandType.REGISTER) {
@@ -375,7 +472,7 @@ public class Parser
             {
                 // 8xy6 - SHR Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.write( 0x8006 | regNo0 << 8 | 0 << 4);
+                context.writeWord(this, 0x8006 | regNo0 << 8 | 0 << 4);
             }
         },
         SUBN("SUN",OperandType.REGISTER,OperandType.REGISTER)  {
@@ -385,7 +482,7 @@ public class Parser
                 // 8xy7 - SUBN Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x8007 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x8007 | regNo0 << 8 | regNo1 << 4);
             }
         },
         SHL("SHL",OperandType.REGISTER)  {
@@ -394,7 +491,7 @@ public class Parser
             {
                 // 8xyE - SHL Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.write( 0x800e | regNo0 << 8 | 0 << 4);
+                context.writeWord(this, 0x800e | regNo0 << 8 | 0 << 4);
             }
         },
         SNE2("SNE",OperandType.REGISTER,OperandType.REGISTER) {
@@ -404,7 +501,7 @@ public class Parser
                 // 9xy0 - SNE Vx, Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0x9000 | regNo0 << 8 | regNo1 << 4);
+                context.writeWord(this, 0x9000 | regNo0 << 8 | regNo1 << 4);
             }
         },
         LD3("LD",OperandType.INDEX,OperandType.ADDRESS) {
@@ -413,7 +510,7 @@ public class Parser
             {
                 // Annn - LD I, addr
                 int cnst = assertIn12BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xA000 | cnst );
+                context.writeWord(this, 0xA000 | cnst );
             }
         },
         JP2("JP",OperandType.REGISTER_V0,OperandType.ADDRESS) {
@@ -422,7 +519,7 @@ public class Parser
             {
                 // Bnnn - JP V0, addr
                 int cnst = assertIn12BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xB000 | cnst );
+                context.writeWord(this, 0xB000 | cnst );
             }
         },
         RND("RND",OperandType.REGISTER,OperandType.BYTE)  {
@@ -432,7 +529,7 @@ public class Parser
                 // Cxkk - RND Vx, byte
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xc000 | regNo0 << 8 | cnst );
+                context.writeWord(this, 0xc000 | regNo0 << 8 | cnst );
             }
         },
         DRW("DRW",OperandType.REGISTER,OperandType.REGISTER,OperandType.NIBBLE) {
@@ -443,7 +540,7 @@ public class Parser
                 int x = assertIn4BitRange( evaluate( instruction.child(0), context ) );
                 int y = assertIn4BitRange( evaluate( instruction.child(1), context ) );
                 int h = assertIn4BitRange( evaluate( instruction.child(2), context ) );
-                context.write( 0xd000 | x << 8 | y << 4 | h);
+                context.writeWord(this, 0xd000 | x << 8 | y << 4 | h);
             }
         },
         SKP("SKP",OperandType.REGISTER) {
@@ -452,7 +549,7 @@ public class Parser
             {
                 // Ex9E - SKP Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.write( 0xe09e | regNo0 << 8 );
+                context.writeWord(this, 0xe09e | regNo0 << 8 );
             }
         },
         SKNP("SKNP",OperandType.REGISTER){
@@ -461,7 +558,7 @@ public class Parser
             {
                 // ExA1 - SKNP Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.write( 0xe0a1 | regNo0 << 8 );
+                context.writeWord(this, 0xe0a1 | regNo0 << 8 );
             }
         },
         LD4("LD",OperandType.REGISTER,OperandType.DELAY_TIMER) {
@@ -470,16 +567,16 @@ public class Parser
             {
                 // Fx07 - LD Vx, DT
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.write( 0xf007 | regNo0 << 8 );
+                context.writeWord(this, 0xf007 | regNo0 << 8 );
             }
         },
-        LD5("LD",OperandType.REGISTER,OperandType.KEYCODE) {
+        LD5("LD",OperandType.REGISTER,OperandType.PRESSED_KEY ) {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx0A - LD Vx, K
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.write( 0xf00a | regNo0 << 8 );
+                context.writeWord(this, 0xf00a | regNo0 << 8 );
             }
         },
         LD6("LD",OperandType.DELAY_TIMER,OperandType.REGISTER) {
@@ -488,7 +585,7 @@ public class Parser
             {
                 // Fx15 - LD DT, Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xf015 | regNo0 << 8 );
+                context.writeWord(this, 0xf015 | regNo0 << 8 );
             }
         },
         LD7("LD",OperandType.SOUND_TIMER,OperandType.REGISTER) {
@@ -497,7 +594,7 @@ public class Parser
             {
                 // Fx18 - LD ST, Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xf018 | regNo0 << 8 );
+                context.writeWord(this, 0xf018 | regNo0 << 8 );
             }
         },
         ADD3("ADD",OperandType.INDEX,OperandType.REGISTER) {
@@ -506,7 +603,7 @@ public class Parser
             {
                 // Fx1E - ADD I, Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xf01e | regNo0 << 8 );
+                context.writeWord(this, 0xf01e | regNo0 << 8 );
             }
         },
         LD8("LD",OperandType.FONT,OperandType.REGISTER) {
@@ -515,7 +612,7 @@ public class Parser
             {
                 // Fx29 - LD F, Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xf029 | regNo0 << 8 );
+                context.writeWord(this, 0xf029 | regNo0 << 8 );
             }
         },
         LD9("LD",OperandType.BCD,OperandType.REGISTER) {
@@ -524,7 +621,7 @@ public class Parser
             {
                 // Fx33 - LD B, Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xf033 | regNo0 << 8 );
+                context.writeWord(this, 0xf033 | regNo0 << 8 );
             }
         },
         LD10("LD",OperandType.I_INDIRECT,OperandType.REGISTER){
@@ -533,7 +630,7 @@ public class Parser
             {
                 // Fx55 - LD [I], Vx
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                context.write( 0xf055 | regNo0 << 8 );
+                context.writeWord(this, 0xf055 | regNo0 << 8 );
             }
         },
         LD11("LD",OperandType.REGISTER,OperandType.I_INDIRECT){
@@ -542,7 +639,7 @@ public class Parser
             {
                 // Fx65 - LD Vx, [I]
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.write( 0xf065 | regNo0 << 8 );
+                context.writeWord(this, 0xf065 | regNo0 << 8 );
             }
         };
 
@@ -612,11 +709,12 @@ public class Parser
             {
                 return ((NumberNode) node).value;
             }
-            if ( node instanceof LabelReferenceNode)
+            if ( node instanceof TextNode && ((TextNode) node).isValidIdentifier() )
             {
-                final SymbolTable.Symbol symbol = ctx.symbolTable.get( ((LabelReferenceNode) node).identifier );
+                final Identifier id = new Identifier( ((TextNode) node).value );
+                final SymbolTable.Symbol symbol = ctx.symbolTable.get( id );
                 if ( symbol == null ) {
-                    throw new RuntimeException("Unknown symbol '"+symbol.name+"'");
+                    throw new RuntimeException("Unknown symbol '"+id.value+"'");
                 }
                 if ( !(symbol.value instanceof Number) ) {
                     throw new RuntimeException("Symbol '"+symbol.name+"' has non-numeric value "+symbol.value);
@@ -639,13 +737,20 @@ public class Parser
             if ( ! insn.mnemonic.equalsIgnoreCase( node.mnemonic ) ) {
                 return false;
             }
+//            final List<OperandType> matched = new ArrayList<>();
             for ( int i = 0, len = insn.operandCount() ; i < len ; i++ )
             {
                 OperandType expected = insn.operandType( i );
                 if ( ! expected.matches( node.child(i) ) ) {
                     return false;
                 }
+//                matched.add( expected );
             }
+//            System.out.println("---- "+insn+" ----");
+//            for ( int i = 0 ; i < matched.size() ; i++ )
+//            {
+//                System.out.println( "MATCHED: "+matched.get(i)+" -> "+node.child(i) );
+//            }
             return true;
         }
 

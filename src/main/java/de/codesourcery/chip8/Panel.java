@@ -44,8 +44,10 @@ public class Panel extends JPanel
             {
                 for (int x = 0; x < w; x++)
                 {
-                    if ( screen.readPixel( x,y ) ) {
-                        g.fillRect( x*blockWidth, y*blockHeight, blockWidth, blockHeight );
+                    if ( screen.readPixel( x,y ) )
+                    {
+                        g.fillRect( x*blockWidth, y*blockHeight,
+                                blockWidth, blockHeight );
                     }
                 }
             }

@@ -1,4 +1,4 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.parser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -148,5 +148,10 @@ public final class Lexer
             scanner.setOffset( tokens.get(0).offset );
             tokens.clear();
         }
+    }
+
+    public Scanner getScanner()
+    {
+        return scanner;
     }
 }

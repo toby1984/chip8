@@ -29,6 +29,9 @@ import java.util.function.Consumer;
 
 public class Main extends JFrame
 {
+    public static final int TICK_INTERVAL_MILLIS = 1000/500;
+    public static final String PROGRAM_CLASSPATH = "/space_invaders.ch8";
+
     public static void main(String[] args) throws InvocationTargetException, InterruptedException
     {
         SwingUtilities.invokeAndWait( () ->
@@ -54,7 +57,7 @@ public class Main extends JFrame
 
             try
             {
-                emu.memory.load( "/logo.ch8", 0x200 );
+                emu.memory.load( PROGRAM_CLASSPATH, 0x200 );
             }
             catch (IOException e)
             {
@@ -65,20 +68,24 @@ public class Main extends JFrame
 
         setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
         panel.setPreferredSize( new Dimension(640,320) );
-        panel.addKeyListener( new KeyAdapter()
+        panel.setFocusable( true );
+        panel.requestFocusInWindow();
+        final KeyAdapter keyListener = new KeyAdapter()
         {
             @Override
             public void keyPressed(KeyEvent e)
             {
                 int key = keyCode( e );
-                if ( key != -1 ) {
+                if ( key != -1 )
+                {
                     keyboard.keyPressed( key );
                 }
             }
 
             private int keyCode(KeyEvent ev)
             {
-                switch( ev.getKeyCode() ) {
+                switch ( ev.getKeyCode() )
+                {
                     case KeyEvent.VK_1:
                         return 0x00;
                     case KeyEvent.VK_2:
@@ -120,11 +127,13 @@ public class Main extends JFrame
             public void keyReleased(KeyEvent e)
             {
                 int key = keyCode( e );
-                if ( key != -1 ) {
+                if ( key != -1 )
+                {
                     keyboard.keyReleased( key );
                 }
             }
-        });
+        };
+        panel.addKeyListener( keyListener );
 
         getContentPane().setLayout( new GridBagLayout() );
 
@@ -142,7 +151,7 @@ public class Main extends JFrame
             {
                 try
                 {
-                    Thread.sleep(1000/500);
+                    Thread.sleep( TICK_INTERVAL_MILLIS );
                 }
                 catch (InterruptedException e)
                 {

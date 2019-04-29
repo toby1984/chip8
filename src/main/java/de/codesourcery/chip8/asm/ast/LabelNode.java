@@ -1,4 +1,6 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.ast;
+
+import de.codesourcery.chip8.asm.Identifier;
 
 public class LabelNode extends ASTNode
 {

@@ -1,8 +1,7 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.ast;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 public class ASTNode
 {

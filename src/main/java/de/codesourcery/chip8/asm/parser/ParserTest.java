@@ -1,4 +1,6 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.parser;
+
+import de.codesourcery.chip8.asm.ast.ASTNode;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -10,7 +12,6 @@ import javax.swing.event.TreeModelListener;
 import javax.swing.tree.TreeModel;
 import javax.swing.tree.TreePath;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.io.ByteArrayOutputStream;

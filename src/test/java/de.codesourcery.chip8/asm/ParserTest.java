@@ -1,5 +1,9 @@
 package de.codesourcery.chip8.asm;
 
+import de.codesourcery.chip8.asm.ast.ASTNode;
+import de.codesourcery.chip8.asm.parser.Lexer;
+import de.codesourcery.chip8.asm.parser.Parser;
+import de.codesourcery.chip8.asm.parser.Scanner;
 import junit.framework.TestCase;
 import org.apache.commons.lang3.StringUtils;
 

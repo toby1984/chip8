@@ -1,9 +1,12 @@
 package de.codesourcery.chip8.asm;
 
+import de.codesourcery.chip8.asm.parser.Lexer;
+import de.codesourcery.chip8.asm.parser.Scanner;
+import de.codesourcery.chip8.asm.parser.Token;
+import de.codesourcery.chip8.asm.parser.TokenType;
 import junit.framework.TestCase;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,7 +39,7 @@ public class LexerTest extends TestCase
         while(true){
             final Token tok = lexer.next();
             list.add(tok);
-            if ( tok.is(TokenType.EOF) ) {
+            if ( tok.is( TokenType.EOF) ) {
                 break;
             }
         }

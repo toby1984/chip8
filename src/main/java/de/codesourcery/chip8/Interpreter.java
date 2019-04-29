@@ -15,6 +15,8 @@
  */
 package de.codesourcery.chip8;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.util.Arrays;
 import java.util.Random;
 import java.util.function.Consumer;
@@ -191,7 +193,7 @@ public class Interpreter
         else if ( (cmd & 0xf0) == 0x10 )
         {
             // 0x1xxx 	jmp xxx 	jump to address
-            pc = (cmd & 0x0f)<<8|(data& 0xff);
+            pc = (cmd & 0x0f)<<8|(data & 0xff);
         }
         else if ( (cmd & 0xf0) == 0x20 ) {
             // 0x2xxx 	jsr xxx 	jump to subroutine at address xxx 	16 levels maximum
@@ -340,12 +342,14 @@ public class Interpreter
         }
         else if ( (cmd & 0xf0) == 0xc0 ) {
             // 0xcrxx 	rand vr,xxx    	vr = random number less than or equal to xxx
-            register[ cmd & 0x0f ] = rnd.nextInt( 256 ) & (data & 0xff);
+            final int reg = cmd & 0x0f;
+            final int cnst = data & 0xff;
+            register[reg] = rnd.nextInt( 256 ) & cnst;
         }
         else if ( (cmd & 0xf0) == 0xd0 )
         {
-            int x = cmd & 0x0f;
-            int y = (data & 0xf0)>>>4;
+            int x = register[ cmd & 0x0f ];
+            int y = register[ (data & 0xf0)>>>4 ];
             int height = (data & 0x0f);
             if ( height != 0x00 )
             {
@@ -429,9 +433,8 @@ public class Interpreter
                              // // location I,I+1,I+2
                              // Doesn't change I
                     String value = Integer.toString( register[r0]);
-                    while( value.length() < 3 ) {
-                        value = "0" + value;
-                    }
+                    value = StringUtils.leftPad(value,3,'0');
+
                     trace("Writing '"+value+"' @ 0x"+Integer.toHexString( index ) );
                     memory.write( index , value.charAt(0) );
                     memory.write( index+1 , value.charAt(1) );

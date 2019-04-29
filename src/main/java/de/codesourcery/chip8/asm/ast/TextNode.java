@@ -1,4 +1,6 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.ast;
+
+import de.codesourcery.chip8.asm.Identifier;
 
 public class TextNode extends ASTNode
 {
@@ -7,6 +9,10 @@ public class TextNode extends ASTNode
     public TextNode(String value)
     {
         this.value = value;
+    }
+
+    public boolean isValidIdentifier() {
+        return Identifier.isValid(value);
     }
 
     @Override

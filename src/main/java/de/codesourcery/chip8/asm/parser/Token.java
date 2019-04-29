@@ -1,4 +1,4 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.parser;
 
 public final class Token
 {

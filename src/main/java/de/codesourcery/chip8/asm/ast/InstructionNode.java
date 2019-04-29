@@ -1,4 +1,6 @@
-package de.codesourcery.chip8.asm;
+package de.codesourcery.chip8.asm.ast;
+
+import de.codesourcery.chip8.asm.parser.Parser;
 
 public class InstructionNode extends ASTNode
 {
