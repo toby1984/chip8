@@ -1,0 +1,101 @@
+0nnn - SYS addr
+Jump to a machine code routine at nnn.  This instruction is only used on the old computers on which Chip-8was originally implemented.  It is ignored by modern interpreters.  This will not be implemented.
+
+00E0 - CLS
+Clear the display.
+
+00EE - RET
+Return from a subroutine.The interpreter sets the program counter to the address at the top of the stack,then subtracts 1 from the stack pointer.
+
+1nnn - JP addr
+Jump to location nnn.  The interpreter sets the program counter to nnn
+
+2nnn - CALL addr
+Call subroutine at nnn.  The interpreter increments the stack pointer, then puts the current PC on the topof the stack.  The PC is then set to nnn.
+
+3xkk - SE Vx, byte
+Skip  next  instruction  if  Vx  =  kk.   The  interpreter  compares  register  Vx  to  kk,  and  if  they  are  equal,increments the program counter by 2.
+
+4xkk - SNE Vx, byte
+Skip next instruction if Vx != kk.  The interpreter compares register Vx to kk, and if they are not equal,increments the program counter by 2.
+
+5xy0 - SE Vx, Vy
+Skip next instruction if Vx = Vy.  The interpreter compares register Vx to register Vy, and if they are equal,increments the program counter by 2.
+
+6xkk - LD Vx, byte
+Set Vx = kk.  The interpreter puts the value kk into register Vx.
+
+7xkk - ADD Vx, byte
+Set Vx = Vx + kk.  Adds the value kk to the value of register Vx, then stores the result in Vx.
+
+8xy0 - LD Vx, Vy
+
+Set Vx = Vy.  Stores the value of register Vy in register Vx.
+
+8xy1 - OR Vx, Vy
+Set Vx = Vx OR Vy.  Performs a bitwise OR on the values of Vx and Vy, then stores the result in Vx.  Abitwise OR compares the corresponding bits from two values, and if either bit is 1, then the same bit in theresult is also 1.  Otherwise, it is 0.
+
+8xy2 - AND Vx, Vy
+Set Vx = Vx AND Vy.  Performs a bitwise AND on the values of Vx and Vy, then stores the result in Vx.A bitwise AND compares the corresponding bits from two values, and if both bits are 1, then the same bit in the result is also 1.  Otherwise, it is 0.
+
+8xy3 - XOR Vx, Vy
+Set Vx = Vx XOR Vy.  Performs a bitwise exclusive OR on the values of Vx and Vy, then stores the resultin Vx.  An exclusive OR compares the corresponding bits from two values, and if the bits are not both thesame, then the corresponding bit in the result is set to 1.  Otherwise, it is 0.
+
+8xy4 - ADD Vx, Vy
+Set Vx = Vx + Vy, set VF = carry.  The values of Vx and Vy are added together.  If the result is greaterthan 8 bits (i.e., ¿ 255,) VF is set to 1, otherwise 0.  Only the lowest 8 bits of the result are kept, and storedin Vx.
+
+8xy5 - SUB Vx, Vy
+Set  Vx  =  Vx  -  Vy,  set  VF  =  NOT  borrow.   If  Vx  ¿  Vy,  then  VF  is  set  to  1,  otherwise  0.   Then  Vy  issubtracted from Vx, and the results stored in Vx.
+
+8xy6 - SHR Vx{, Vy}
+Set Vx = Vx SHR 1.  If the least-significant bit of Vx is 1, then VF is set to 1, otherwise 0.  Then Vx isdivided by 2.
+
+8xy7 - SUBN Vx, Vy
+Set  Vx  =  Vy  -  Vx,  set  VF  =  NOT  borrow.   If  Vy  ¿  Vx,  then  VF  is  set  to  1,  otherwise  0.   Then  Vx  issubtracted from Vy, and the results stored in Vx.
+
+8xyE - SHL Vx{, Vy}
+Set Vx = Vx SHL 1.  If the most-significant bit of Vx is 1, then VF is set to 1, otherwise to 0.  Then Vx ismultiplied by 2.
+
+9xy0 - SNE Vx, Vy
+Skip next instruction if Vx != Vy.  The values of Vx and Vy are compared, and if they are not equal, theprogram counter is increased by 2.
+
+Annn - LD I, addr
+Set I = nnn.  The value of register I is set to nnn.
+
+Bnnn - JP V0, addr
+Jump to location nnn + V0.  The program counter is set to nnn plus the value of V0.
+
+Cxkk - RND Vx, byte
+Set Vx = random byte AND kk.  The interpreter generates a random number from 0 to 255, which is thenANDed with the value kk.  The results are stored in Vx.  See instruction 8xy2 for more information on AND.
+
+Dxyn - DRW Vx, Vy, nibble
+Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.  The interpreter reads nbytes from memory, starting at the address stored in I. These bytes are then displayed as sprites on screenat coordinates (Vx, Vy).  Sprites are XOR’d onto the existing screen.  If this causes any pixels to be erased,VF is set to 1, otherwise it is set to 0.  If the sprite is positioned so part of it is outside the coordinates ofthe display, it wraps around to the opposite side of the screen.
+
+Ex9E - SKP Vx
+Skip next instruction if key with the value of Vx is pressed. Checks the keyboard, and if the key correspondingto the value of Vx is currently in the down position, PC is increased by 2.
+
+ExA1 - SKNP Vx
+Skip  next  instruction  if  key  with  the  value  of  Vx  is  not  pressed.   Checks  the  keyboard,  and  if  the  keycorresponding to the value of Vx is currently in the up position, PC is increased by 2.
+
+Fx07 - LD Vx, DT
+Set Vx = delay timer value.  The value of DT is placed into Vx.
+
+Fx0A - LD Vx, K
+Wait for a key press, store the value of the key in Vx.  All execution stops until a key is pressed, then thevalue of that key is stored in Vx.
+
+Fx15 - LD DT, Vx
+Set delay timer = Vx.  Delay Timer is set equal to the value of Vx.
+
+Fx18 - LD ST, Vx
+Set sound timer = Vx.  Sound Timer is set equal to the value of Vx.
+
+Fx1E - ADD I, Vx
+Set I = I + Vx.  The values of I and Vx are added, and the results are stored in I.
+
+Fx29 - LD F, Vx
+Set  I  =  location  of  sprite  for  digit  Vx.   The  value  of  I  is  set  to  the  location  for  the  hexadecimal  spritecorresponding to the value of Vx.  See section 2.4, Display, for more information on the Chip-8 hexadecimalfont.  To obtain this value, multiply VX by 5 (all font data stored in first 80 bytes of memory).
+
+Fx33 - LD B, Vx
+Store BCD representation of Vx in memory locations I, I+1, and I+2.  The interpreter takes the decimalvalue of Vx, and places the hundreds digit in memory at location in I, the tens digit at location I+1, andthe ones digit at location I+2.
+
+Fx55 - LD [I], VxStores V0 to VX in memory starting at address I. I is then set to I + x + 1.Fx65 - LD Vx, [I]Fills V0 to VX with values from memory starting at address I. I is then set to I + x + 1.

@@ -37,6 +37,7 @@ public class Interpreter
             screen.setBeep( false );
         }
     };
+
     private final Timer delayTimer = new Timer( "delay" )
     {
         @Override

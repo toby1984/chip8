@@ -103,12 +103,12 @@ public class Disassembler
         else if ( (cmd & 0xf0) == 0x10 )
         {
             // 0x1xxx 	jmp xxx 	jump to address
-            buffer.append("jmp 0x");
+            buffer.append("jp 0x");
             wordToHex( (cmd & 0x0f)<<8|(data& 0xff) );
         }
         else if ( (cmd & 0xf0) == 0x20 ) {
             // 0x2xxx 	jsr xxx 	jump to subroutine at address xxx 	16 levels maximum
-            buffer.append("jsr 0x");
+            buffer.append("call 0x");
             wordToHex((cmd & 0x0f)<<8|(data& 0xff) );
         }
         else if ( (cmd & 0xf0) == 0x30 ) {
@@ -138,7 +138,7 @@ public class Disassembler
             // 0x6rxx 	mov vr,xx 	move constant to register r
             int r0 = cmd & 0x0f;
             int cnst = data & 0xff;
-            buffer.append("mov v").append(r0).append(", 0x");
+            buffer.append("ld v").append(r0).append(", 0x");
             byteToHex( cnst );
         }
         else if ( (cmd & 0xf0) == 0x70 ) {
@@ -154,7 +154,7 @@ public class Disassembler
             switch( data & 0x0f ) {
                 case 0x00:
                     // 0x8ry0 	mov vr,vy 	move register vy into vr
-                    buffer.append("mov v").append(dst).append(",v").append(src);
+                    buffer.append("ld v").append(dst).append(",v").append(src);
                     break;
                 case 0x01:
                     // 0x8ry1 	or rx,ry 	or register vy into register vr
@@ -207,13 +207,13 @@ public class Disassembler
         else if ( (cmd & 0xf0) == 0xa0 ) {
             // 0xaxxx 	mvi xxx 	Load index register with constant xxx
             int index = (cmd & 0x0f)<<8 | (data & 0xff);
-            buffer.append("mvi ");
+            buffer.append("ld I, ");
             wordToHex( index );
         }
         else if ( (cmd & 0xf0) == 0xb0 ) {
             // 0xbxxx 	jmi xxx 	Jump to address xxx+register v0
             int adr = (cmd & 0x0f)<<8 | (data & 0xff);
-            buffer.append("jmi ");
+            buffer.append("jp v0, ");
             wordToHex( adr );
         }
         else if ( (cmd & 0xf0) == 0xc0 ) {
@@ -228,14 +228,14 @@ public class Disassembler
             int height = (data & 0x0f);
             if ( height != 0x00 )
             {
-                buffer.append("sprite ").append(x).append(",")
+                buffer.append("draw ").append(x).append(",")
                         .append(y).append(",").append(height);
             }
             else
             {
                 // 0xdry0 	xsprite rx,ry 	Draws extended sprite at screen location rx,ry
                 // As above,but sprite is always 16 x 16. Superchip only, not yet implemented
-                buffer.append("xsprite ").append(x).append(",").append(y);
+                buffer.append("xdraw ").append(x).append(",").append(y);
             }
         }
         else if ( (cmd & 0xf0) == 0xe0 )
@@ -243,14 +243,14 @@ public class Disassembler
             int key = cmd & 0x0f;
             if ( data == 0x9e )
             {
-                // 0xek9e 	skpr k 	skip if key (register rk) pressed
+                // 0xek9e 	skp k 	skip if key (register rk) pressed
                 // The key is a key number, see the chip-8 documentation
-                buffer.append("skpr ").append( key );
+                buffer.append("skp ").append( key );
             }
             else if ( data == 0xa1 )
             {
-                // 0xeka1 	skup k 	skip if key (register rk) not pressed
-                buffer.append("skup ").append( key );
+                // 0xeka1 	sknp k 	skip if key (register rk) not pressed
+                buffer.append("sknp ").append( key );
             } else {
                 illegalInstruction();
             }
@@ -261,39 +261,39 @@ public class Disassembler
             switch( data )
             {
                 case 0x07:   // 0xfr07	gdelay vr 	get delay timer into vr
-                    buffer.append("gdelay v").append(r0);
+                    buffer.append("ld v").append(r0).append(",DT");
                     break;
                 case 0x0a:   // 0xfr0a	key vr wait for keypress,put key in register vr
-                    buffer.append("key v").append(r0);
+                    buffer.append("ld v").append(r0).append(",K");
                     break;
                 case 0x15:   // 0xfr15	sdelay vr 	set the delay timer to vr
-                    buffer.append("sdelay v").append(r0);
+                    buffer.append("ld dt, v").append(r0);
                     break;
                 case 0x18:   // 0xfr18	ssound vr 	set the sound timer to vr
-                    buffer.append("ssound v").append(r0);
+                    buffer.append("ld st, v").append(r0);
                     break;
                 case 0x1e:   // 0xfr1e	adi vr add register vr to the index register
-                    buffer.append("adi v").append(r0);
+                    buffer.append("add i, v").append(r0);
                     break;
                 case 0x29:   // 0xfr29	font vr 	point I to the sprite for hexadecimal character in vr
                     // Sprite is 5 bytes high
-                    buffer.append("font v").append(r0);
+                    buffer.append("ld v").append(r0).append(", F");
                     break;
                 case 0x30:   // 0xfr30	xfont vr 	point I to the sprite for hexadecimal character in vr
                     // Sprite is 10 bytes high,Super only
-                    buffer.append("xfont v").append(r0);
+                    buffer.append("xld v").append(r0).append(", F");
                     break;
                 case 0x33:   // 0xfr33	bcd vr 	store the bcd representation of register vr at
                     // // location I,I+1,I+2
                     // Doesn't change I
-                    buffer.append("bcd v").append(r0);
+                    buffer.append("ld B, v").append(r0);
                     break;
                 case 0x55:   // 0xfr55	str v0-vr 	store registers v0-vr at location I onwards
                     // I is incremented to point to the next location on. e.g. I = I + r + 1
-                    buffer.append("str v0-v").append(r0);
+                    buffer.append("ld [I], v").append(r0);
                     break;
                 case 0x65:   // 0xfx65	ldr v0-vr 	load registers v0-vr from location I onwards as above.
-                    buffer.append("ldr v0-v").append(r0);
+                    buffer.append("ld v").append(r0).append(",[I]");
                     break;
                 default:
                     illegalInstruction();
