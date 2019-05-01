@@ -28,12 +28,39 @@ public class Main
 {
     public static final String PROGRAM_CLASSPATH = "/space_invaders.ch8";
 
+    private static final SixtyHertzTimer timer60Hz =new SixtyHertzTimer();
+    private static final Timer soundTimer = new Timer( "sound" )
+    {
+        private final InterpreterDriver.IDriverCallback cb = ip -> ip.interpreter.soundTimerTriggered();
+
+        @Override
+        protected void triggered()
+        {
+            driver.runOnThread(cb);
+        }
+    };
+
+    private static final Timer delayTimer = new Timer( "delay" )
+    {
+        private final InterpreterDriver.IDriverCallback cb = ip -> ip.interpreter.delayTimerTriggered();
+
+        @Override
+        protected void triggered()
+        {
+            driver.runOnThread(cb);
+        }
+    };
+    private static InterpreterDriver driver;
+    private static final Memory memory = new Memory( 4096);
+    private static final Screen screen = new Screen( memory );
+    private static final Keyboard keyboard = new Keyboard();
+
     public static void main(String[] args) throws InvocationTargetException, InterruptedException
     {
         final File configFile = new File( System.getProperty("user.home"), ".chip8Config.properties");
         final MainFrame.IConfigurationProvider configProvider = new MainFrame.IConfigurationProvider()
         {
-            private volatile Properties configuration;
+            private Properties configuration;
 
             @Override
             public synchronized Properties load()
@@ -65,7 +92,7 @@ public class Main
                 if ( configuration == null ) {
                     return;
                 }
-                try (FileOutputStream out = new FileOutputStream(configFile ) )
+                try (FileOutputStream out = new FileOutputStream(configFile) )
                 {
                     System.out.println("Saving configuration to "+configFile.getAbsolutePath());
                     configuration.store(out, "Automatically generated, changes will be overwritten");
@@ -78,11 +105,8 @@ public class Main
             }
         };
 
-        final Memory memory = new Memory( 4096);
-        final Screen screen = new Screen( memory );
-        final Keyboard keyboard = new Keyboard();
-        final Consumer<Interpreter> hook = emu -> {
-
+        final Consumer<Interpreter> hook = emu ->
+        {
             try
             {
                 final File file = new ConfigSerializer( configProvider.load() , "global" ).getLastBinary();
@@ -108,8 +132,14 @@ public class Main
                 e.printStackTrace();
             }
         };
-        final Interpreter ip = new Interpreter( memory,screen,keyboard,hook);
-        final InterpreterDriver controller = new InterpreterDriver(ip);
-        SwingUtilities.invokeAndWait( () -> new MainFrame( controller, configProvider));
+
+        final Interpreter ip = new Interpreter( memory,screen,keyboard, soundTimer, delayTimer, hook);
+        driver = new InterpreterDriver(ip);
+
+        timer60Hz.addListener(soundTimer);
+        timer60Hz.addListener(delayTimer);
+        timer60Hz.start();
+
+        SwingUtilities.invokeAndWait( () -> new MainFrame(driver, configProvider));
     }
 }

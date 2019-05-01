@@ -18,7 +18,6 @@ package de.codesourcery.chip8;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 
-import javax.sound.sampled.Line;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -32,25 +31,8 @@ public class Interpreter
     public final Screen screen;
     public final Keyboard keyboard;
 
-    private final SixtyHertzTimer timer=new SixtyHertzTimer();
-
-    public final Timer soundTimer = new Timer( "sound" )
-    {
-        @Override
-        protected void triggered()
-        {
-            screen.setBeep( false );
-        }
-    };
-
-    public final Timer delayTimer = new Timer( "delay" )
-    {
-        @Override
-        protected void triggered()
-        {
-            waitForDelay = false;
-        }
-    };
+    public final Timer soundTimer;
+    public final Timer delayTimer;
 
     public int pc = 0x200;
     public int sp;
@@ -69,21 +51,28 @@ public class Interpreter
 
     private volatile Consumer<Interpreter> resetHook;
 
-    public Interpreter(Memory memory, Screen screen, Keyboard keyboard,Consumer<Interpreter> resetHook) {
+    public Interpreter(Memory memory, Screen screen, Keyboard keyboard, Timer soundTimer, Timer delayTimer, Consumer<Interpreter> resetHook) {
         this.memory = memory;
         this.screen = screen;
         this.keyboard = keyboard;
+        this.soundTimer = soundTimer;
+        this.delayTimer = delayTimer;
         this.resetHook = resetHook;
-        resetHook.accept( this );
-        timer.addListener( soundTimer );
-        timer.addListener( delayTimer );
-        timer.start();
+        reset();
     }
 
     public void setResetHook(Consumer<Interpreter> resetHook)
     {
         Validate.notNull(resetHook, "resetHook must not be null");
         this.resetHook = resetHook;
+    }
+
+    public void soundTimerTriggered() {
+        screen.setBeep(false);
+    }
+
+    public void delayTimerTriggered() {
+        waitForDelay = false;
     }
 
     public void reset()
