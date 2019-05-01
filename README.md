@@ -8,7 +8,7 @@ Maven 3.x, JDK 11+
 
 # Running
 
-mvn clean package
-java -jar target/chip8.jar
+`mvn clean package
+java -jar target/chip8.jar`
 
 ![Screenshot](https://raw.githubusercontent.com/toby1984/chip8/master/screenshot.png)
