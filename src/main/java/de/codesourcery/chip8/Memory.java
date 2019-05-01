@@ -15,6 +15,9 @@
  */
 package de.codesourcery.chip8;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,22 +40,24 @@ public class Memory
         return data[address] & 0xff;
     }
 
-    public void load(String classpath,int address) throws IOException
+    public int load(String classpath,int address) throws IOException
     {
         InputStream in = Memory.class.getResourceAsStream( classpath );
-        if ( in != null ) {
-            load(in,address);
-        } else {
+        if (in == null)
+        {
             throw new FileNotFoundException("classpath:"+classpath);
         }
+        return load(in,address);
     }
 
-    public void load(InputStream in, int address) throws IOException
+    public int load(InputStream in, int address) throws IOException
     {
+        Validate.notNull(in, "input stream must not be null");
         try
         {
             final byte[] input = in.readAllBytes();
             System.arraycopy( input , 0 ,data, address, input.length);
+            return input.length;
         } finally {
             in.close();
         }
@@ -62,8 +67,50 @@ public class Memory
         this.data[address] = (byte) value;
     }
 
+    public void write(int startAddress, byte[] data)
+    {
+        for ( int readPtr= 0,writePtr=startAddress,len=data.length ; readPtr < len; readPtr++,writePtr = (writePtr+1) % this.data.length )
+        {
+            this.data[writePtr] = data[readPtr];
+        }
+    }
+
     public void reset()
     {
         Arrays.fill(data,(byte) 0);
+    }
+
+    private static String hexWord(int value) {
+        return StringUtils.leftPad( Integer.toHexString(value & 0xfff), 4 , '0' );
+    }
+
+    private static String hexByte(int value) {
+        return StringUtils.leftPad( Integer.toHexString(value & 0xff), 2 , '0' );
+    }
+
+    public String dump(int offset, int count,int bytesPerRow) {
+        return dump(offset, this.data,count, bytesPerRow);
+    }
+
+    public static String dump(int offset,byte[] data,int bytesToPrint, int bytesPerRow) {
+
+        final StringBuilder buffer = new StringBuilder();
+        for ( int cnt  = 0 ; cnt < bytesToPrint ; ) {
+            buffer.append( hexWord(offset) ).append(": ");
+            for ( int w = 0 ; w < bytesPerRow && cnt < bytesToPrint ; w++, cnt++ )
+            {
+                    buffer.append( hexByte( data[offset] ) );
+                    offset = (offset+1) % data.length;
+                    if ( (w+1) < bytesPerRow ) {
+                        buffer.append(" ");
+                    }
+
+            }
+            if ( (cnt+1) < bytesToPrint )
+            {
+                buffer.append("\n");
+            }
+        }
+        return buffer.toString();
     }
 }

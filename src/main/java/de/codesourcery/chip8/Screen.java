@@ -314,7 +314,7 @@ public class Screen
         writeGlyphs();
     }
 
-    public boolean checkChanged() {
+    public boolean hasChanged() {
         return hasChanged.compareAndExchange( true,false );
     }
 }

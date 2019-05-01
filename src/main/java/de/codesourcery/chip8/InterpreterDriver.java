@@ -1,49 +1,49 @@
 package de.codesourcery.chip8;
 
-import javax.swing.SwingUtilities;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 
-public class Controller
+public class InterpreterDriver
 {
     public final Interpreter interpreter;
 
     @FunctionalInterface
-    public interface ITickListener {
-        void tick(Controller controller);
+    public interface IDriverCallback
+    {
+        void invoke(InterpreterDriver controller);
     }
 
     @FunctionalInterface
     public interface IStateListener
     {
-        void stateChanged(Controller controller, boolean newState);
+        void stateChanged(InterpreterDriver controller, boolean newState);
     }
 
-    private final BlockingQueue<ITickListener> tickListeners =
+    private final BlockingQueue<IDriverCallback> tickListeners =
             new ArrayBlockingQueue<>(100);
 
-    // @GuardedBy( listeners )
     private final BlockingQueue<IStateListener> stateListeners =
             new ArrayBlockingQueue<>(100);
 
     private final ControllerThread thread = new ControllerThread();
 
     public enum CmdType {
-        START,STOP,STEP,RESET
+        START,STOP,STEP,RESET,RUN,TERMINATE
     }
 
     private static final class Cmd
     {
-        public final CountDownLatch latch=new CountDownLatch(1);
+        public final Runnable runnable;
         public final CmdType type;
 
-        private Cmd(CmdType type) {
+        private Cmd(CmdType type,Runnable runnable) {
             this.type = type;
+            this.runnable = runnable;
         }
 
-        public void ack() {
-            latch.countDown();
+        public void onReceive() {
+            runnable.run();
         }
     }
 
@@ -56,20 +56,16 @@ public class Controller
         private long cycleCount=0;
         private long delay=1000;
         private int tickInterval = 10000;
+        private volatile boolean terminated;
 
         public double dummyValue = 123;
 
         public void submit(Cmd cmd)
         {
+            if ( terminated ) {
+                throw new IllegalStateException("Cannot submit command to terminated thread");
+            }
             cmdQueue.add( cmd );
-            try
-            {
-                cmd.latch.await();
-            }
-            catch (InterruptedException e)
-            {
-                e.printStackTrace();
-            }
         }
 
         private void delay()
@@ -84,15 +80,21 @@ public class Controller
         @Override
         public void run()
         {
+            try {
+                doRun();
+            } finally {
+                terminated = true;
+            }
+        }
+
+        private void doRun()
+        {
             while( true)
             {
-                final Cmd cmd;
+                Cmd cmd;
                 if ( running )
                 {
-                    cmd = cmdQueue.peek();
-                    if ( cmd != null ) {
-                        cmdQueue.remove();
-                    }
+                    cmd = cmdQueue.poll();
                 }
                 else
                 {
@@ -107,12 +109,21 @@ public class Controller
                 }
                 if ( cmd != null )
                 {
-                    cmd.ack();
+                    cmd.onReceive();
                     switch(cmd.type)
                     {
+                        case TERMINATE:
+                            terminated = true;
+                            while( ( cmd = cmdQueue.poll() ) != null ) {
+                                cmd.onReceive();
+                            }
+                            return;
+                        case RUN:
+                            continue;
                         case RESET:
                             running = false;
                             interpreter.reset();
+                            invokeTickListeners();
                             invokeStateListeners( false );
                             continue;
                         case START:
@@ -168,7 +179,7 @@ public class Controller
             {
                 try
                 {
-                    l.stateChanged( Controller.this, newState );
+                    l.stateChanged( InterpreterDriver.this, newState );
                 }
                 catch(Exception e)
                 {
@@ -184,7 +195,7 @@ public class Controller
             {
                 try
                 {
-                    l.tick( Controller.this );
+                    l.invoke( InterpreterDriver.this );
                 }
                 catch(Exception e)
                 {
@@ -195,7 +206,7 @@ public class Controller
         }
     }
 
-    public Controller(Interpreter interpreter)
+    public InterpreterDriver(Interpreter interpreter)
     {
         this.interpreter = interpreter;
         thread.setDaemon( true );
@@ -203,27 +214,52 @@ public class Controller
         thread.start();
     }
 
-    public void start() {
-        thread.submit( new Cmd(CmdType.START) );
+    public void start()
+    {
+        execute(CmdType.START);
     }
 
     public void reset() {
-        thread.submit( new Cmd(CmdType.RESET) );
+        execute(CmdType.RESET);
     }
 
     public void stop() {
-        thread.submit( new Cmd(CmdType.STOP) );
+        execute(CmdType.STOP);
     }
 
-    public void step() {
-        thread.submit( new Cmd(CmdType.STEP) );
+    public void terminate()
+    {
+        thread.submit(new Cmd(CmdType.TERMINATE,() -> {} ) );
     }
 
-    public void registerTickListener(ITickListener listener) {
+    public void step()
+    {
+        execute(CmdType.STEP);
+    }
+
+    public void runOnThread(IDriverCallback callback)
+    {
+        thread.submit(new Cmd(CmdType.RUN, () -> callback.invoke(this ) ) );
+    }
+
+    private void execute(CmdType type)
+    {
+        final CountDownLatch latch = new CountDownLatch(1);
+        thread.submit( new Cmd(type, latch::countDown) );
+        try
+        {
+            latch.await();
+        }
+        catch(InterruptedException e) {
+            /* can't help it */
+        }
+    }
+
+    public void registerTickListener(IDriverCallback listener) {
         this.tickListeners.add( listener );
     }
 
-    public void removeTickListener(ITickListener listener) {
+    public void removeTickListener(IDriverCallback listener) {
         this.tickListeners.remove( listener );
     }
 

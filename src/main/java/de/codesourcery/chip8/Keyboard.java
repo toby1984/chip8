@@ -26,13 +26,16 @@ public class Keyboard
     private final Set<Integer> pressedKeys = new HashSet<>();
 
     public void keyPressed(int key) {
+        System.out.println("Pressed: "+key);
         synchronized (pressedKeys)
         {
             pressedKeys.add( Integer.valueOf( key ) );
         }
     }
 
-    public void keyReleased(int key) {
+    public void keyReleased(int key)
+    {
+        System.out.println("Released: "+key);
         synchronized (pressedKeys)
         {
             pressedKeys.remove( Integer.valueOf( key ) );

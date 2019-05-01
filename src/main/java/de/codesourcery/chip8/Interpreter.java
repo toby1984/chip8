@@ -16,6 +16,7 @@
 package de.codesourcery.chip8;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
 
 import javax.sound.sampled.Line;
 import java.util.Arrays;
@@ -66,10 +67,9 @@ public class Interpreter
 
     private final Random rnd = new Random( RAND_SEED );
 
-    private final Consumer<Interpreter> resetHook;
+    private volatile Consumer<Interpreter> resetHook;
 
-    public Interpreter(Memory memory, Screen screen, Keyboard keyboard,
-                       Consumer<Interpreter> resetHook) {
+    public Interpreter(Memory memory, Screen screen, Keyboard keyboard,Consumer<Interpreter> resetHook) {
         this.memory = memory;
         this.screen = screen;
         this.keyboard = keyboard;
@@ -78,6 +78,12 @@ public class Interpreter
         timer.addListener( soundTimer );
         timer.addListener( delayTimer );
         timer.start();
+    }
+
+    public void setResetHook(Consumer<Interpreter> resetHook)
+    {
+        Validate.notNull(resetHook, "resetHook must not be null");
+        this.resetHook = resetHook;
     }
 
     public void reset()
@@ -102,6 +108,7 @@ public class Interpreter
         pc = 0x200;
         sp = 0;
         index = 0;
+
         resetHook.accept( this );
     }
 

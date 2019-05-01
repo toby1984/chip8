@@ -7,6 +7,7 @@ import de.codesourcery.chip8.asm.parser.Lexer;
 import de.codesourcery.chip8.asm.parser.Parser;
 import de.codesourcery.chip8.asm.parser.Scanner;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -116,16 +117,25 @@ public class Assembler
             throw new RuntimeException( "Source file does not exist: " + src.getAbsolutePath() );
         }
         final File out = new File( args[1] );
-
+        assemble(src,out);
     }
 
-    public static void assemble(File src, File out) throws IOException
+    public static int assemble(File src, File out) throws IOException
     {
-        if ( ! src.exists() ) {
-            throw new RuntimeException("Source file does not exist: "+src.getAbsolutePath());
+        if (!src.exists())
+        {
+            throw new RuntimeException("Source file does not exist: " + src.getAbsolutePath());
         }
 
-        final String srcCode = new String( Files.readAllBytes( src.toPath() ) );
+        final String srcCode = new String(Files.readAllBytes(src.toPath()));
+        return assemble( srcCode, new FileOutputStream(out) );
+    }
+
+    public static int assemble(String srcCode, OutputStream out) throws IOException
+    {
+        Validate.notNull(srcCode, "srcCode must not be null");
+        Validate.notNull(out, "out must not be null");
+
         final Parser p = new Parser( new Lexer( new Scanner( srcCode ) ) );
         final ASTNode ast = p.parse();
         System.out.println("---- AST ---\n");
@@ -134,9 +144,10 @@ public class Assembler
         });
         final byte[] binary = new Assembler().assemble( ast, 0x200 );
 
-        try ( FileOutputStream sout = new FileOutputStream( out ) ) {
-            sout.write( binary );
+        try ( out ) {
+            out.write( binary );
         }
-        System.out.println("Wrote "+binary.length+" bytes to "+out.getAbsolutePath());
+        System.out.println("Wrote "+binary.length+" bytes.");
+        return binary.length;
     }
 }

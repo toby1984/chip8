@@ -56,13 +56,13 @@ public class Panel extends JPanel
                 switch ( ev.getKeyCode() )
                 {
                     case KeyEvent.VK_1:
-                        return 0x00;
-                    case KeyEvent.VK_2:
                         return 0x01;
-                    case KeyEvent.VK_3:
+                    case KeyEvent.VK_2:
                         return 0x02;
-                    case KeyEvent.VK_4:
+                    case KeyEvent.VK_3:
                         return 0x03;
+                    case KeyEvent.VK_4:
+                        return 0x0c;
                     case KeyEvent.VK_Q:
                         return 0x04;
                     case KeyEvent.VK_W:
@@ -70,21 +70,21 @@ public class Panel extends JPanel
                     case KeyEvent.VK_E:
                         return 0x06;
                     case KeyEvent.VK_R:
-                        return 0x07;
-                    case KeyEvent.VK_A:
-                        return 0x08;
-                    case KeyEvent.VK_S:
-                        return 0x09;
-                    case KeyEvent.VK_D:
-                        return 0x0a;
-                    case KeyEvent.VK_F:
-                        return 0x0b;
-                    case KeyEvent.VK_Y:
-                        return 0x0c;
-                    case KeyEvent.VK_X:
                         return 0x0d;
-                    case KeyEvent.VK_C:
+                    case KeyEvent.VK_A:
+                        return 0x07;
+                    case KeyEvent.VK_S:
+                        return 0x08;
+                    case KeyEvent.VK_D:
+                        return 0x09;
+                    case KeyEvent.VK_F:
                         return 0x0e;
+                    case KeyEvent.VK_Y:
+                        return 0x0a;
+                    case KeyEvent.VK_X:
+                        return 0x00b;
+                    case KeyEvent.VK_C:
+                        return 0x0b;
                     case KeyEvent.VK_V:
                         return 0x0f;
                     default:
