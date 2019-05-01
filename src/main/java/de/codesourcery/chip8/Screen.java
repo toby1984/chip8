@@ -16,6 +16,7 @@
 package de.codesourcery.chip8;
 
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The original implementation of the Chip-8 language used a 64x32-pixel monochrome display
@@ -56,6 +57,7 @@ public class Screen
     private final Memory memory;
     private Mode mode = Mode.DEFAULT;
     private boolean isBeeping;
+    private final AtomicBoolean hasChanged = new AtomicBoolean(true);
 
     private int glypPtr = GLYPH_MEM_START;
 
@@ -118,6 +120,7 @@ public class Screen
         for ( int i =0 ; i < toScroll ; i++ ) {
             scrollDown();
         }
+        hasChanged.set(true);
     }
 
     private void scrollDown() {
@@ -142,6 +145,7 @@ public class Screen
     public void clear()
     {
         Arrays.fill(data, (byte) 0);
+        hasChanged.set(true);
     }
 
     /**
@@ -215,6 +219,7 @@ public class Screen
             }
             currentY = (currentY+1) % mode.height();
         }
+        hasChanged.set(true);
         return pixelsCleared;
     }
 
@@ -305,7 +310,11 @@ public class Screen
     public void reset()
     {
         isBeeping = false;
-        Arrays.fill( data, (byte) 0);
+        clear();
         writeGlyphs();
+    }
+
+    public boolean checkChanged() {
+        return hasChanged.compareAndExchange( true,false );
     }
 }

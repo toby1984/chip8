@@ -29,6 +29,10 @@ public class Memory
         this.data = new byte[ sizeInBytes ];
     }
 
+    public int getSizeInBytes() {
+        return data.length;
+    }
+
     public int read(int address) {
         return data[address] & 0xff;
     }

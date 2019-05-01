@@ -15,11 +15,16 @@
  */
 package de.codesourcery.chip8;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Disassembler
 {
     private static final StringBuffer buffer = new StringBuffer();
 
     private static final char[] HEX = "0123456789abcdef".toCharArray();
+
+    private static final List<String> result = new ArrayList<>();
 
     private static void wordToHex(int value)
     {
@@ -34,25 +39,28 @@ public class Disassembler
         buffer.append(hi).append(low);
     }
 
-    public static String disAsm(Memory memory, int startAddress, int words)
+    public static List<String> disAsm(Memory memory, int startAddress, int words)
     {
-        buffer.setLength( 0 );
+        result.clear();
+
         int pc = startAddress;
         for ( int i = 0 ; i < words ; i++ )
         {
-            if ( i > 0 )
-            {
-                buffer.append("\n");
-            }
+            buffer.setLength( 0 );
             wordToHex( pc );
             buffer.append(": ");
             disassembleInstruction(memory,pc);
             buffer.append(" ; ");
             byteToHex( memory.read(pc) );
             byteToHex( memory.read(pc+1) );
-            pc += 2;
+            pc = (pc+2) % memory.getSizeInBytes();
+            if ( (i+1) < words )
+            {
+                buffer.append("\n");
+            }
+            result.add( buffer.toString() );
         }
-        return buffer.toString();
+        return result;
     }
 
     private static void disassembleInstruction(Memory memory,final int pc)

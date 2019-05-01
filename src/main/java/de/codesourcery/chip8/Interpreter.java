@@ -17,7 +17,9 @@ package de.codesourcery.chip8;
 
 import org.apache.commons.lang3.StringUtils;
 
+import javax.sound.sampled.Line;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
 
@@ -31,7 +33,7 @@ public class Interpreter
 
     private final SixtyHertzTimer timer=new SixtyHertzTimer();
 
-    private final Timer soundTimer = new Timer( "sound" )
+    public final Timer soundTimer = new Timer( "sound" )
     {
         @Override
         protected void triggered()
@@ -40,7 +42,7 @@ public class Interpreter
         }
     };
 
-    private final Timer delayTimer = new Timer( "delay" )
+    public final Timer delayTimer = new Timer( "delay" )
     {
         @Override
         protected void triggered()
@@ -49,11 +51,11 @@ public class Interpreter
         }
     };
 
-    private int pc = 0x200;
-    private int sp;
-    private int index;
-    private int register[] = new int[16];
-    private int stack[] = new int[16];
+    public int pc = 0x200;
+    public int sp;
+    public int index;
+    public int register[] = new int[16];
+    public int stack[] = new int[16];
 
     // keyboard handling
     private boolean waitForKey;
@@ -143,7 +145,12 @@ public class Interpreter
     {
         if ( DEBUG )
         {
-            debug( Disassembler.disAsm( memory, pc, 1 ) );
+            final List<String> lines = Disassembler.disAsm( memory, pc, 1 );
+            for (int i = 0, linesSize = lines.size(); i < linesSize; i++)
+            {
+                String l = lines.get( i );
+                debug( l );
+            }
         }
 
         final int cmd = memory.read( pc++ );
