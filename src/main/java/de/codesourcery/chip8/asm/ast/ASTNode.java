@@ -23,6 +23,35 @@ public class ASTNode
     public final List<ASTNode> children = new ArrayList<>();
     public ASTNode parent;
 
+    private TextRegion region;
+
+    public ASTNode() {
+    }
+
+    public ASTNode(TextRegion region) {
+        this.region = region;
+    }
+
+    public TextRegion getRegion()
+    {
+        return region;
+    }
+
+    public TextRegion getCombinedRegion()
+    {
+        TextRegion result = region == null ? null : region.createCopy();
+        for ( ASTNode child : children )
+        {
+            if ( result == null )
+            {
+                result = child.getCombinedRegion();
+            } else {
+                result.merge(child.getCombinedRegion() );
+            }
+        }
+        return result;
+    }
+
     public void add(ASTNode node)
     {
         node.parent = this;

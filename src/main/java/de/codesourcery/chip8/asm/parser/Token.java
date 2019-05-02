@@ -15,6 +15,9 @@
  */
 package de.codesourcery.chip8.asm.parser;
 
+import de.codesourcery.chip8.asm.ast.TextRegion;
+import org.apache.commons.lang3.Validate;
+
 public final class Token
 {
     public final TokenType type;
@@ -27,9 +30,18 @@ public final class Token
 
     public Token(TokenType type, String value, int offset)
     {
+        Validate.notNull(value, "value must not be null");
+        Validate.notNull(type, "type must not be null");
+        if ( offset < 0 ) {
+            throw new IllegalArgumentException("Offset must be >= 0");
+        }
         this.type = type;
         this.value = value;
         this.offset = offset;
+    }
+
+    public TextRegion region() {
+        return new TextRegion(this.offset, this.value.length() );
     }
 
     public boolean is(TokenType type) {

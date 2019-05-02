@@ -17,6 +17,15 @@ package de.codesourcery.chip8.ui;
 
 import de.codesourcery.chip8.Disassembler;
 import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.asm.ast.ASTNode;
+import de.codesourcery.chip8.asm.ast.InstructionNode;
+import de.codesourcery.chip8.asm.ast.LabelNode;
+import de.codesourcery.chip8.asm.ast.RegisterNode;
+import de.codesourcery.chip8.asm.ast.TextNode;
+import de.codesourcery.chip8.asm.ast.TextRegion;
+import de.codesourcery.chip8.asm.parser.Lexer;
+import de.codesourcery.chip8.asm.parser.Parser;
+import de.codesourcery.chip8.asm.parser.Scanner;
 import de.codesourcery.chip8.emulator.Breakpoint;
 import de.codesourcery.chip8.emulator.Interpreter;
 import de.codesourcery.chip8.emulator.InterpreterDriver;
@@ -26,6 +35,7 @@ import org.apache.commons.lang3.Validate;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JDesktopPane;
+import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JInternalFrame;
@@ -36,9 +46,18 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
+import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.Style;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -58,6 +77,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -418,7 +438,6 @@ public class MainFrame extends JFrame
                 @Override
                 protected void paintComponent(Graphics g)
                 {
-                    System.out.println("Repainting");
                     super.paintComponent(g);
                     final int fontHeight = g.getFontMetrics().getHeight();
                     int x0 = 0;
@@ -432,8 +451,6 @@ public class MainFrame extends JFrame
                             ip.getAllBreakpoints().stream()
                                 .filter(x -> !x.isTemporary)
                                 .forEach(x -> bps.put(x.address, x));
-                            System.out.println( "Breakpoints:");
-                            System.out.println( bps.values() );
                         }
                     });
                     synchronized (lines)
@@ -441,7 +458,6 @@ public class MainFrame extends JFrame
                         synchronized (bps)
                         {
                             int address = startAddress;
-                            System.out.println("Address: "+address+" / current PC: "+currentPC);
                             for (String line : lines)
                             {
                                 final String pcMarker = address == currentPC ? " >> " : "    ";
@@ -486,7 +502,6 @@ public class MainFrame extends JFrame
                     this.lines.clear();
                     this.lines.addAll( lines );
                 }
-                System.out.println("Repaint queued");
                 panel.repaint();
             }
         };
@@ -513,7 +528,13 @@ public class MainFrame extends JFrame
             private final JButton load = new JButton("Load");
             private final JButton save = new JButton("Save");
 
-            private final JTextArea source = new JTextArea();
+            private final Thread highlightThread;
+            private final Object DOC_LOCK = new Object();
+            private boolean documentChanged = true;
+            private boolean documentChangeListenerEnabled=true;
+
+
+            private final JTextPane source = new JTextPane();
             private final List<Message> messages = new ArrayList<>();
             private final JTable table = new JTable(new DefaultTableModel()
             {
@@ -548,8 +569,121 @@ public class MainFrame extends JFrame
                 @Override public void setValueAt(Object aValue, int rowIndex, int columnIndex) { }
             });
 
+            private final Style defaultStyle;
+            private final Style insnStyle;
+            private final Style identifierStyle;
+            private final Style registerStyle;
+            private final Style textStyle;
+
             {
+                insnStyle = document().addStyle( "instruction", null );
+                StyleConstants.setForeground(insnStyle, Color.BLUE);
+
+                identifierStyle = document().addStyle( "identifier", null );
+                StyleConstants.setForeground(identifierStyle, Color.GREEN);
+
+                registerStyle = document().addStyle( "register", null );
+                StyleConstants.setForeground(registerStyle, Color.MAGENTA);
+
+                textStyle = document().addStyle( "text", null );
+                StyleConstants.setForeground(textStyle, Color.BLACK);
+                StyleConstants.setBold(textStyle,true);
+
+                defaultStyle = document().addStyle( "defaultStyle", null );
+
                 configure(source);
+
+                highlightThread = new Thread(() ->
+                {
+                    while( true )
+                    {
+                        try {
+                            synchronized( DOC_LOCK )
+                            {
+                                if ( documentChanged )
+                                {
+                                    documentChanged = false;
+                                } else {
+                                    DOC_LOCK.wait();
+                                    continue;
+                                }
+                            }
+                            Thread.sleep(250);
+                            synchronized( DOC_LOCK )
+                            {
+                                if ( documentChanged ) {
+                                    continue;
+                                }
+                            }
+                            // do highlighting
+                            SwingUtilities.invokeAndWait(() ->
+                            {
+                                try
+                                {
+                                    final String text = source.getText();
+                                    if ( text != null )
+                                    {
+                                        System.out.println("Highlighting text");
+                                        documentChangeListenerEnabled = false;
+                                        final Parser p = new Parser(new Lexer(new Scanner(text)));
+                                        final ASTNode ast;
+                                        try
+                                        {
+                                            ast = p.parse();
+                                        }
+                                        catch(Exception e) {
+                                            return;
+                                        }
+                                        final StyledDocument document = document();
+                                        document.setCharacterAttributes(0,text.length(),defaultStyle,true );
+                                        ast.visitInOrder((node, depth) ->
+                                        {
+                                            final TextRegion region = node.getRegion();
+                                            if (node instanceof InstructionNode)
+                                            {
+                                                document.setCharacterAttributes(
+                                                    region.getStartingOffset(), region.getLength(), insnStyle, true);
+                                            } else if ( node instanceof LabelNode ) {
+                                                document.setCharacterAttributes(
+                                                    region.getStartingOffset(), region.getLength(), identifierStyle, true);
+                                            } else if ( node instanceof TextNode ) {
+                                                document.setCharacterAttributes(
+                                                    region.getStartingOffset(), region.getLength(), textStyle, true);
+                                            } else if ( node instanceof RegisterNode ) {
+                                                document.setCharacterAttributes(
+                                                    region.getStartingOffset(), region.getLength(), registerStyle, true);
+                                            }
+                                        });
+                                    }
+                                } finally {
+                                    documentChangeListenerEnabled = true;
+                                }
+                            });
+                        } catch (InvocationTargetException| InterruptedException e) { /* can't help it */ }
+                    }
+                });
+                highlightThread.setDaemon(true);
+                highlightThread.start();
+
+                source.getStyledDocument().addDocumentListener(new DocumentListener()
+                {
+                    @Override public void insertUpdate(DocumentEvent e) { documentChanged(); }
+                    @Override public void removeUpdate(DocumentEvent e) { documentChanged(); }
+                    @Override public void changedUpdate(DocumentEvent e) { documentChanged(); }
+
+                    private void documentChanged()
+                    {
+                        if ( documentChangeListenerEnabled )
+                        {
+                            synchronized (DOC_LOCK)
+                            {
+                                documentChanged = true;
+                                DOC_LOCK.notifyAll();
+                            }
+                        }
+                    }
+                });
+
                 getContentPane().setLayout( new GridBagLayout());
 
                 save.addActionListener( ev -> {
@@ -615,6 +749,10 @@ public class MainFrame extends JFrame
                 if ( last != null ) {
                     loadSource(last);
                 }
+            }
+
+            private StyledDocument document() {
+                return source.getStyledDocument();
             }
 
             private void loadSource(File file)

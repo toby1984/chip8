@@ -25,6 +25,7 @@ import de.codesourcery.chip8.asm.ast.LabelNode;
 import de.codesourcery.chip8.asm.ast.NumberNode;
 import de.codesourcery.chip8.asm.ast.RegisterNode;
 import de.codesourcery.chip8.asm.ast.TextNode;
+import de.codesourcery.chip8.asm.ast.TextRegion;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.List;
@@ -145,7 +146,7 @@ public class Parser
             if ( Identifier.isValid( tok.value) && lexer.peek().is(TokenType.COLON ) )
             {
                 lexer.next();
-                return new LabelNode( new Identifier( tok.value ) );
+                return new LabelNode( new Identifier( tok.value ) , tok.region() );
             }
             lexer.pushBack( tok );
         }
@@ -160,7 +161,7 @@ public class Parser
             if ( match != null )
             {
                 lexer.next();
-                final InstructionNode insn = new InstructionNode( match.mnemonic );
+                final InstructionNode insn = new InstructionNode( match.mnemonic, tok.region() );
                 ASTNode op = null;
                 boolean required = false;
                 while ( ( op = parseOperand() ) != null )
@@ -207,46 +208,12 @@ public class Parser
                     default:
                         throw new RuntimeException("Unreachable code reached: "+tok.type);
                 }
-                return new NumberNode( value );
+                return new NumberNode( value, tok.region());
             case REGISTER:
                 final int regNum = Integer.parseInt( lexer.next().value.substring( 1 ) );
-                return new RegisterNode( regNum );
+                return new RegisterNode( regNum, tok.region() );
             case TEXT:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                return new TextNode( lexer.next().value );
+                return new TextNode( lexer.next().value, tok.region() );
         }
         return null;
     }
@@ -258,16 +225,19 @@ public class Parser
         {
             lexer.next();
             lexer.setSkipWhitespace( false );
+            TextRegion region = tok.region();
             final StringBuilder comment = new StringBuilder();
             try {
                 while ( ! lexer.eof() && ! lexer.peek().is(TokenType.NEWLINE) )
                 {
-                    comment.append( lexer.next().value );
+                    final Token tok2 = lexer.next();
+                    region.merge(tok2.region());
+                    comment.append( tok2.value );
                 }
             } finally {
                 lexer.setSkipWhitespace( true );
             }
-            return new CommentNode(comment.toString());
+            return new CommentNode(comment.toString(), region);
         }
         return null;
     }
@@ -481,13 +451,14 @@ public class Parser
                 context.writeWord(this, 0x8005 | regNo0 << 8 | regNo1 << 4);
             }
         },
-        SHR("SHR",OperandType.REGISTER) {
+        SHR("SHR",OperandType.REGISTER,OperandType.REGISTER) {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
-                // 8xy6 - SHR Vx
+                // 8xy6 - SHR Vx,Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.writeWord(this, 0x8006 | regNo0 << 8 | 0 << 4);
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                context.writeWord(this, 0x8006 | regNo0 << 8 | regNo1 << 4);
             }
         },
         SUBN("SUN",OperandType.REGISTER,OperandType.REGISTER)  {
@@ -504,9 +475,10 @@ public class Parser
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
-                // 8xyE - SHL Vx
+                // 8xyE - SHL Vx,Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                context.writeWord(this, 0x800e | regNo0 << 8 | 0 << 4);
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                context.writeWord(this, 0x800e | regNo0 << 8 | regNo1 << 4);
             }
         },
         SNE2("SNE",OperandType.REGISTER,OperandType.REGISTER) {
@@ -752,20 +724,13 @@ public class Parser
             if ( ! insn.mnemonic.equalsIgnoreCase( node.mnemonic ) ) {
                 return false;
             }
-//            final List<OperandType> matched = new ArrayList<>();
             for ( int i = 0, len = insn.operandCount() ; i < len ; i++ )
             {
                 OperandType expected = insn.operandType( i );
                 if ( ! expected.matches( node.child(i) ) ) {
                     return false;
                 }
-//                matched.add( expected );
             }
-//            System.out.println("---- "+insn+" ----");
-//            for ( int i = 0 ; i < matched.size() ; i++ )
-//            {
-//                System.out.println( "MATCHED: "+matched.get(i)+" -> "+node.child(i) );
-//            }
             return true;
         }
 

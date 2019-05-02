@@ -19,8 +19,9 @@ public class CommentNode extends ASTNode
 {
     public final String value;
 
-    public CommentNode(String value)
+    public CommentNode(String value,TextRegion region)
     {
+        super(region);
         this.value = value;
     }
 

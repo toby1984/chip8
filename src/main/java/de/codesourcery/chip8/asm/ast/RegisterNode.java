@@ -19,7 +19,9 @@ public class RegisterNode extends ASTNode
 {
     public final int regNum;
 
-    public RegisterNode(int regNum) {
+    public RegisterNode(int regNum,TextRegion region)
+    {
+        super(region);
         if ( regNum < 0 || regNum > 15 ) {
             throw new IllegalArgumentException( "Register number of out range: "+regNum );
         }

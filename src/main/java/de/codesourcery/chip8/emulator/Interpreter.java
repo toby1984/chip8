@@ -28,6 +28,7 @@ public class Interpreter
 {
     private static final boolean DEBUG = false;
     private static final boolean TRACE = false;
+    private static final boolean TRACE_KEYBOARD = true;
 
     public final Memory memory;
     public final Screen screen;
@@ -43,7 +44,12 @@ public class Interpreter
     public int stack[] = new int[16];
 
     // keyboard handling
-    private boolean waitForKey;
+    private enum KeyboardWaitState {
+        WAIT_PRESS,WAIT_RELEASE,NONE
+    }
+    private KeyboardWaitState keyboardWaitState = KeyboardWaitState.NONE;
+    private int pressedKey;
+
     private int keyDestReg;
     private boolean waitForDelay;
 
@@ -89,7 +95,7 @@ public class Interpreter
         screen.reset();
         keyboard.reset();
 
-        waitForKey = false;
+        keyboardWaitState = KeyboardWaitState.NONE;
         keyDestReg = 0;
         waitForDelay = false;
 
@@ -118,23 +124,40 @@ public class Interpreter
         }
     }
 
+    private static void traceKeyboard(String msg)
+    {
+        if ( TRACE_KEYBOARD)
+        {
+            System.out.println( "trace: " + msg );
+        }
+    }
+
     public void tick()
     {
         if ( waitForDelay ) {
             trace("Waiting for delay");
             return;
         }
-        if ( waitForKey )
+        if ( keyboardWaitState == KeyboardWaitState.WAIT_PRESS )
         {
             final int pressed = keyboard.readKey();
             if ( pressed == Keyboard.NO_KEY )
             {
-                trace("Waiting for keypress");
+                traceKeyboard("Waiting for keypress");
                 return;
             }
-            waitForKey = false;
-            register[ keyDestReg ] = pressed;
-            debug("Got key "+pressed);
+            pressedKey = pressed;
+            keyboardWaitState = KeyboardWaitState.WAIT_RELEASE;
+            traceKeyboard("PRESSED: Key "+pressed);
+        } else if ( keyboardWaitState == KeyboardWaitState.WAIT_RELEASE) {
+
+            if ( keyboard.isKeyPressed(pressedKey) ) {
+                traceKeyboard("Waiting for key release");
+                return;
+            }
+            keyboardWaitState = KeyboardWaitState.NONE;
+            register[ keyDestReg ] = pressedKey;
+            traceKeyboard("RELEASED: Key "+pressedKey);
         }
         executeInstruction();
     }
@@ -154,12 +177,7 @@ public class Interpreter
         final int data = memory.read( pc++ );
         if ( cmd == 0x00 )
         {
-            if ( (data & 0xf0) == 0xc0 )
-            {
-                // 0x00Cx 	scdown x 	Scroll the screen down x lines 	Super only, not implemented
-                screen.scrollDown( data & 0x0f );
-            }
-            else if ( data == 0xe0 )
+            if ( data == 0xe0 )
             {
                 // 0x00E0 	cls 	Clear the screen
                 screen.clear();
@@ -168,16 +186,6 @@ public class Interpreter
             {
                 // 0x00EE 	rts 	return from subroutine call
                 pc = stack[ --sp ];
-            }
-            else if ( data == 0xfb )
-            {
-                // 0x00FB 	scright 	scroll screen 4 pixels right 	Super only,not implemented
-                screen.scrollRight();
-            }
-            else if ( data == 0xfc )
-            {
-                // 0x00FC 	scleft 	scroll screen 4 pixels left 	Super only,not implemented
-                screen.scrollLeft();
             }
             else if ( data == 0xfe )
             {
@@ -244,7 +252,7 @@ public class Interpreter
             if ( TRACE ) trace("Register "+r0+" = 0x"+Integer.toHexString( cnst ) );
         }
         else if ( (cmd & 0xf0) == 0x70 ) {
-            // 0x7rxx 	add vr,vx 	add constant to register r 	No carry generated
+            // 0x7rxx 	add vr,vx 	add constant to register r 	: no carry is generated
             int r0 = cmd & 0x0f;
             int cnst = data & 0xff;
             register[r0] = (register[r0]+cnst) & 0xff;
@@ -286,20 +294,23 @@ public class Interpreter
                     /*
                      * 8xy5 - SUB Vx, Vy
                      * Set Vx = Vx - Vy, set VF = NOT borrow.
-                     * If Vx > Vy, then VF is set to 1, otherwise 0.
+                     * If Vy > Vx, then VF is set to 0, otherwise 1.
                      * Then Vy is subtracted from Vx, and the results stored in Vx.
                      */
                     // 0x8ry5 	sub vr,vy 	subtract register vy from vr,borrow in vf
-                    // vf set to 1 if borrows
-                    register[0x0f] = register[dst] > register[src] ? 1 : 0;
+                    // vf set to 0 if a borrow occurs
+                    register[0x0f] = register[src] > register[dst] ? 0 : 1;
                     register[dst] = (register[dst] - register[src] ) & 0xff;
                     if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
                     if ( TRACE ) trace("VF = "+register[0x0f]);
                     break;
                 case 0x06:
-                    // 0x8r06 	shr vr 	shift register vy right, bit 0 goes into register vf
-                    register[0x0f] = register[dst] & 1;
-                    register[dst] >>>= 1;
+                    // 8XY6
+                    // Shift register VY right one bit and copy it to register VX
+                    //Set register VF to the least significant bit prior to the shift
+                    register[0x0f] = register[src] & 1;
+                    register[src] >>>= 1;
+                    register[dst] = register[src];
                     if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
                     break;
                 case 0x07:
@@ -309,15 +320,16 @@ public class Interpreter
                      * If Vy > Vx, then VF is set to 1, otherwise 0.
                      * Then Vx is subtracted from Vy, and the results stored in Vx.
                      */
-                    register[0x0f] = register[src] > register[dst] ? 1 : 0;
+                    register[0x0f] = register[dst] > register[src] ? 0 : 1;
                     register[dst] = (register[src] - register[dst] ) & 0xff;
                     if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
                     if ( TRACE ) trace("VF = "+register[0x0f]);
                     break;
                 case 0x0e:
                     // 0x8r0e 	shl vr 	shift register vr left,bit 7 goes into register vf
-                    register[0x0f] = (register[dst] & 0b1000_0000) >>> 7;
-                    register[dst] = (register[dst] << 1) & 0xff;
+                    register[0x0f] = (register[src] & 0b1000_0000) >>> 7;
+                    register[src] = (register[src] << 1) & 0xff;
+                    register[dst] = register[src];
                     if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
                     if ( TRACE ) trace("VF = "+register[0x0f]);
                     break;
@@ -361,13 +373,6 @@ public class Interpreter
                 if ( TRACE ) trace("drawSprite @ 0x"+Integer.toHexString( index )+": x="+x+",y="+y+",h="+height);
                 register[0x0f] = screen.drawSprite(x,y,height,index) ? 1 : 0;
             }
-            else
-            {
-                if ( TRACE ) trace("drawSpriteExt @ 0x"+Integer.toHexString( index )+": x="+x+",y="+y);
-                // 0xdry0 	xsprite rx,ry 	Draws extended sprite at screen location rx,ry
-                // As above,but sprite is always 16 x 16. Superchip only, not yet implemented
-                register[0x0f] = screen.drawExtendedSprite(x,y,index) ? 1 : 0;
-            }
         }
         else if ( (cmd & 0xf0) == 0xe0 )
         {
@@ -402,12 +407,12 @@ public class Interpreter
             switch( data )
             {
                 case 0x07:   // 0xfr07	gdelay vr 	get delay timer into vr
-                   register[r0] = delayTimer.value();
+                   register[r0] = delayTimer.value() & 0xff;
                     if ( TRACE ) trace("Register "+r0+" = "+Integer.toHexString( register[r0] ));
                     break;
                 case 0x0a:   // 0xfr0a	key vr wait for keypress,put key in register vr
-                    if ( TRACE ) trace("Waiting for keypress");
-                    waitForKey = true;
+                    if ( TRACE_KEYBOARD ) traceKeyboard("Waiting for keypress");
+                    keyboardWaitState = KeyboardWaitState.WAIT_PRESS;
                     keyDestReg = r0;
                     break;
                 case 0x15:   // 0xfr15	sdelay vr 	set the delay timer to vr
@@ -440,25 +445,33 @@ public class Interpreter
                     String value = Integer.toString( register[r0]);
                     value = StringUtils.leftPad(value,3,'0');
 
-                    if ( TRACE ) trace("Writing '"+value+"' @ 0x"+Integer.toHexString( index ) );
-                    memory.write( index , value.charAt(0) );
-                    memory.write( index+1 , value.charAt(1) );
-                    memory.write( index+2 , value.charAt(2) );
+                    int ptr = index;
+                    if ( TRACE ) trace("Writing '"+value+"' @ 0x"+Integer.toHexString( ptr ) );
+                    memory.write( ptr, value.charAt(0) );
+                    ptr = (ptr+1) & 0xfff;
+                    memory.write( ptr , value.charAt(1) );
+                    ptr = (ptr+1) & 0xfff;
+                    memory.write( ptr , value.charAt(2) );
+                    ptr = (ptr+1) & 0xfff;
                     break;
                 case 0x55:   // 0xfr55	str v0-vr 	store registers v0-vr at location I onwards
                              // I is incremented to point to the next location on. e.g. I = I + r + 1
-                    if ( TRACE ) trace("Storing registers r0-r"+r0+"' @ 0x"+Integer.toHexString( index ) );
-                    for ( int i = 0,ptr = index ; i <= r0 ; ) {
-                        memory.write( ptr++, register[i++] );
+                    ptr = index;
+                    if ( TRACE ) trace("Storing registers r0-r"+r0+"' @ 0x"+Integer.toHexString( ptr ) );
+                    for ( int i = 0 ; i <= r0 ; ) {
+                        memory.write( ptr, register[i++] );
+                        ptr = (ptr+1) & 0xfff;
                     }
-                    index = (index + r0 + 1 ) & 0xfff;
+                    index = ptr;
                     break;
                 case 0x65:   // 0xfx65	ldr v0-vr 	load registers v0-vr from location I onwards as above.
-                    if ( TRACE ) trace("Loading registers r0-r"+r0+"' from 0x"+Integer.toHexString( index ) );
-                    for ( int i = 0,ptr = index ; i <= r0 ; ) {
-                        register[i++] = memory.read( ptr++ );
+                    ptr = index;
+                    if ( TRACE ) trace("Loading registers r0-r"+r0+"' from 0x"+Integer.toHexString( ptr ) );
+                    for ( int i = 0 ; i <= r0 ; ) {
+                        register[i++] = memory.read( ptr );
+                        ptr = (ptr+1) & 0xfff;
                     }
-                    index = (index + r0 + 1 ) & 0xfff;
+                    index = ptr;
                     break;
                 default:
                     illegalInstruction( cmd, data );

@@ -71,13 +71,7 @@ public class Disassembler
         final int data = memory.read( pc+1 );
         if ( cmd == 0x00 )
         {
-            if ( (data & 0xf0) == 0xc0 )
-            {
-                // 0x00Cx 	scdown x 	Scroll the screen down x lines 	Super only, not implemented
-                buffer.append("scdown ");
-                byteToHex( data & 0x0f );
-            }
-            else if ( data == 0xe0 )
+            if ( data == 0xe0 )
             {
                 // 0x00E0 	cls 	Clear the screen
                 buffer.append("cls");
@@ -86,16 +80,6 @@ public class Disassembler
             {
                 // 0x00EE 	rts 	return from subroutine call
                 buffer.append("rts");
-            }
-            else if ( data == 0xfb )
-            {
-                // 0x00FB 	scright 	scroll screen 4 pixels right 	Super only,not implemented
-                buffer.append("scright");
-            }
-            else if ( data == 0xfc )
-            {
-                // 0x00FC 	scleft 	scroll screen 4 pixels left 	Super only,not implemented
-                buffer.append("scleft");
             }
             else if ( data == 0xfe )
             {
@@ -188,8 +172,8 @@ public class Disassembler
                     buffer.append("sub v").append(dst).append(",v").append(src);
                     break;
                 case 0x06:
-                    // 0x8r06 	shr vr 	shift register vy right, bit 0 goes into register vf
-                    buffer.append("shr v").append(dst);
+                    // 0x8xy6 	shr vr 	shift register vy right 1 bit and copy it to vx, bit 0 goes into register vf
+                    buffer.append("shr v").append(dst).append(",v").append(src);
                     break;
                 case 0x07:
                     /*
@@ -201,8 +185,8 @@ public class Disassembler
                     buffer.append("subn v").append(src).append(",v").append(dst);
                     break;
                 case 0x0e:
-                    // 0x8r0e 	shl vr 	shift register vr left,bit 7 goes into register vf
-                    buffer.append("shl v").append(dst);
+                    // 0x8xye 	shl vx,vy 	shift vy left 1 bit and copy it to vx,bit 7 goes into register vf
+                    buffer.append("shl v").append(dst).append(",v").append(src);
                     break;
                 default:
                     throw new RuntimeException("Unhandled opcode: 0x"+Integer.toHexString(cmd<<8|data) );

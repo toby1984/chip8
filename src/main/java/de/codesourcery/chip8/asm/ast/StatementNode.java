@@ -17,6 +17,9 @@ package de.codesourcery.chip8.asm.ast;
 
 public class StatementNode extends ASTNode
 {
+    public StatementNode() {
+    }
+
     @Override
     public String toString()
     {

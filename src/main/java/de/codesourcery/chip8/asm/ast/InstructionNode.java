@@ -21,8 +21,9 @@ public class InstructionNode extends ASTNode
 {
     public final String mnemonic;
 
-    public InstructionNode(String mnemonic)
+    public InstructionNode(String mnemonic,TextRegion region)
     {
+        super(region);
         this.mnemonic = mnemonic;
     }
 

@@ -126,9 +126,9 @@ public class Panel extends JPanel
         synchronized (IMAGE_LOCK)
         {
             final Graphics2D g = createGraphics();
-            g.setColor( Color.WHITE );
-            g.fillRect( 0,0,image.getWidth(),image.getHeight() );
             g.setColor( Color.BLACK );
+            g.fillRect( 0,0,image.getWidth(),image.getHeight() );
+            g.setColor( Color.WHITE );
             final int w = screen.getMode().width();
             final int h = screen.getMode().height();
             int blockWidth = getWidth() / w;

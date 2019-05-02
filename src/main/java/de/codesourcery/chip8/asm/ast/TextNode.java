@@ -21,8 +21,9 @@ public class TextNode extends ASTNode
 {
     public final String value;
 
-    public TextNode(String value)
+    public TextNode(String value,TextRegion region)
     {
+        super(region);
         this.value = value;
     }
 

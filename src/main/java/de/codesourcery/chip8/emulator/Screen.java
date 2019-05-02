@@ -110,60 +110,12 @@ public class Screen
     }
 
     /**
-     * Scroll down X lines (Super only).
-     *
-     * @param lines
-     */
-    public void scrollDown(int lines)
-    {
-        int toScroll = lines % mode.height();
-        for ( int i =0 ; i < toScroll ; i++ ) {
-            scrollDown();
-        }
-        hasChanged.set(true);
-    }
-
-    private void scrollDown() {
-
-        final int bytesPerRow = getBytesPerRow();
-        int lastRowOffset = (mode.height()-1)*(mode.width()/8);
-        int previousRowOffset = (mode.height()-2)*(mode.width()/8);
-        for ( int rows = mode.height(); rows > 0 ; rows--)
-        {
-            for ( int i = 0 ; i < bytesPerRow ; i++)
-            {
-                data[ lastRowOffset + i ] = data[ previousRowOffset + i ];
-            }
-            lastRowOffset -= bytesPerRow;
-            previousRowOffset -= bytesPerRow;
-        }
-    }
-
-    /**
      * Clear screen.
      */
     public void clear()
     {
         Arrays.fill(data, (byte) 0);
         hasChanged.set(true);
-    }
-
-    /**
-     * Scroll left 4 pixels (Super only).
-     */
-    public void scrollLeft()
-    {
-        // TODO: Implement me
-        throw new RuntimeException("scrollLeft() not implemented");
-    }
-
-    /**
-     * Scroll right 4 pixels (Super only).
-     */
-    public void scrollRight()
-    {
-        // TODO: Implement me
-        throw new RuntimeException("scrollRight() not implemented");
     }
 
     /**
@@ -259,24 +211,6 @@ public class Screen
         int bitOffset = x - (x/8)*8;
         int mask = 0b1000_0000 >>> bitOffset;
         data[ byteOffset ] &= ~mask;
-    }
-
-    /**
-     * Draw extended sprite (16x16) at screen location rx,ry (Super only).
-     *
-     * Sprites stored in memory at location in index register, maximum 8 bits wide.
-     * Wraps around the screen. If when drawn, clears a pixel, vf is set to 1
-     * otherwise it is zero. All drawing is xor drawing (e.g. it toggles the screen pixels)
-     *
-     * @param x
-     * @param y
-     * @param spriteAddr
-     * @return <code>true</code> if at least one pixel was cleared by this operation, otherwise <code>false</code>
-     */
-    public boolean drawExtendedSprite(int x, int y,int spriteAddr)
-    {
-        // TODO: Implement me
-        throw new RuntimeException("drawExtendedSprite() not implemented");
     }
 
     /**

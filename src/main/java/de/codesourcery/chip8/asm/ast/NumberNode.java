@@ -19,7 +19,8 @@ public class NumberNode extends ASTNode
 {
     public final int value;
 
-    public NumberNode(int number) {
+    public NumberNode(int number,TextRegion region) {
+        super(region);
         this.value = number;
     }
 

@@ -21,8 +21,9 @@ public class LabelNode extends ASTNode
 {
     public Identifier id;
 
-    public LabelNode(Identifier id)
+    public LabelNode(Identifier id,TextRegion region)
     {
+        super(region);
         this.id = id;
     }
 
