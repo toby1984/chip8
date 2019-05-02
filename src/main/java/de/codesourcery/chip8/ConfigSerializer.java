@@ -17,7 +17,6 @@ package de.codesourcery.chip8;
 
 import org.apache.commons.lang3.StringUtils;
 
-import javax.swing.JComponent;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Point;
@@ -27,19 +26,19 @@ import java.util.Properties;
 final class ConfigSerializer
 {
     private final Properties props;
-    private String windowKey;
+    private MainFrame.ConfigKey configKey;
 
     public ConfigSerializer(Properties props) {
-        this(props,"global");
+        this(props, MainFrame.ConfigKey.GLOBAL);
     }
 
-    public ConfigSerializer(Properties props, String windowKey) {
+    public ConfigSerializer(Properties props, MainFrame.ConfigKey configKey) {
         this.props = props;
-        this.windowKey = windowKey;
+        this.configKey = configKey;
     }
 
     private String prop(String name) {
-        return windowKey+"."+name;
+        return configKey +"."+name;
     }
 
     private String getProperty(String name) {
@@ -108,9 +107,9 @@ final class ConfigSerializer
         setBoolean("enabled", yesNo);
     }
 
-    public static void applyWindowState(Properties props, String windowKey, Component comp)
+    public static void applyWindowState(Properties props, MainFrame.ConfigKey configKey, Component comp)
     {
-        final ConfigSerializer wrapper = new ConfigSerializer(props,windowKey);
+        final ConfigSerializer wrapper = new ConfigSerializer(props, configKey );
         comp.setSize( wrapper.getSize(new Dimension(200,100 ) ) );
         comp.setLocation( wrapper.getLocation(new Point(0,0 ) ) );
         comp.setVisible( wrapper.isEnabled(true ) );
@@ -142,9 +141,9 @@ final class ConfigSerializer
         setFile("source",file);
     }
 
-    public static void saveWindowState(Properties props, String windowKey, Component comp)
+    public static void saveWindowState(Properties props, MainFrame.ConfigKey configKey, Component comp)
     {
-        final ConfigSerializer wrapper = new ConfigSerializer(props,windowKey);
+        final ConfigSerializer wrapper = new ConfigSerializer(props, configKey );
         wrapper.setSize( comp.getSize() );
         wrapper.setLocation( comp.getLocation() );
         wrapper.setEnabled( comp.isVisible() );

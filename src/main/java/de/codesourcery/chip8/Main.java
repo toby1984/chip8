@@ -109,7 +109,7 @@ public class Main
         {
             try
             {
-                final File file = new ConfigSerializer( configProvider.load() , "global" ).getLastBinary();
+                final File file = new ConfigSerializer( configProvider.load() , MainFrame.ConfigKey.GLOBAL ).getLastBinary();
                 if ( file != null )
                 {
                         try ( FileInputStream in = new FileInputStream(file) )
