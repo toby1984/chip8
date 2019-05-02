@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 public class Interpreter
 {
     private static final boolean DEBUG = false;
+    private static final boolean TRACE = false;
 
     public final Memory memory;
     public final Screen screen;
@@ -111,7 +112,7 @@ public class Interpreter
     }
 
     private static void trace(String msg) {
-        if ( DEBUG )
+        if ( TRACE )
         {
             System.out.println( "trace: " + msg );
         }
@@ -145,8 +146,7 @@ public class Interpreter
             final List<String> lines = Disassembler.disAsm( memory, pc, 1 );
             for (int i = 0, linesSize = lines.size(); i < linesSize; i++)
             {
-                String l = lines.get( i );
-                debug( l );
+                debug(lines.get( i ));
             }
         }
 
@@ -209,7 +209,8 @@ public class Interpreter
             int r0 = cmd & 0x0f;
             int cnst = data & 0xff;
             final boolean skip = register[r0] == cnst;
-            trace("SKIP: "+skip+" (0x"+Integer.toHexString( register[r0])+" == 0x"+Integer.toHexString(cnst));
+
+            if ( TRACE ) trace("SKIP: "+skip+" (0x"+Integer.toHexString( register[r0])+" == 0x"+Integer.toHexString(cnst));
             if ( skip ) {
                 pc += 2;
             }
@@ -219,7 +220,7 @@ public class Interpreter
             int r0 = cmd & 0x0f;
             int cnst = data & 0xff;
             final boolean skip = register[r0] != cnst;
-            trace("SKIP: "+skip+" (0x"+Integer.toHexString( register[r0])+" <> 0x"+Integer.toHexString(cnst));
+            if ( TRACE ) trace("SKIP: "+skip+" (0x"+Integer.toHexString( register[r0])+" <> 0x"+Integer.toHexString(cnst));
             if ( skip ) {
                 pc += 2;
             }
@@ -230,7 +231,7 @@ public class Interpreter
             int r0 = cmd & 0x0f;
             int r1 = (data & 0xf0)>>>4;
             final boolean skip = register[r0] == register[r1];
-            trace("SKIP: "+skip+" (0x"+Integer.toHexString( register[r0])+" <> 0x"+Integer.toHexString(register[r1]));
+            if ( TRACE ) trace("SKIP: "+skip+" (0x"+Integer.toHexString( register[r0])+" <> 0x"+Integer.toHexString(register[r1]));
             if ( skip ) {
                 pc += 2;
             }
@@ -240,14 +241,14 @@ public class Interpreter
             int r0 = cmd & 0x0f;
             int cnst = data & 0xff;
             register[r0] = cnst;
-            trace("Register "+r0+" = 0x"+Integer.toHexString( cnst ) );
+            if ( TRACE ) trace("Register "+r0+" = 0x"+Integer.toHexString( cnst ) );
         }
         else if ( (cmd & 0xf0) == 0x70 ) {
             // 0x7rxx 	add vr,vx 	add constant to register r 	No carry generated
             int r0 = cmd & 0x0f;
             int cnst = data & 0xff;
             register[r0] = (register[r0]+cnst) & 0xff;
-            trace("Register "+r0+" = 0x"+Integer.toHexString( register[r0] ) );
+            if ( TRACE ) trace("Register "+r0+" = 0x"+Integer.toHexString( register[r0] ) );
         }
         else if ( (cmd & 0xf0) == 0x80 ) {
             int dst = cmd & 0x0f;
@@ -256,17 +257,17 @@ public class Interpreter
                 case 0x00:
                     // 0x8ry0 	mov vr,vy 	move register vy into vr
                     register[dst] = register[src];
-                    trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
+                    if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
                     break;
                 case 0x01:
                     // 0x8ry1 	or rx,ry 	or register vy into register vr
                     register[dst] |= register[src];
-                    trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
+                    if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
                     break;
                 case 0x02:
                     // 0x8ry2 	and rx,ry 	and register vy into register vx
                     register[dst] &= register[src];
-                    trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
+                    if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
                     break;
                 case 0x03:
             // 0x8ry3 	xor rx,ry 	exclusive or register ry into register rx
@@ -278,8 +279,8 @@ public class Interpreter
                     int tmp = register[dst] + register[src];
                     register[0x0f] = (tmp & 0xffffff00) != 0 ? 1 : 0;
                     register[dst] = (tmp & 0xff);
-                    trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
-                    trace("VF = "+register[0x0f]);
+                    if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
+                    if ( TRACE ) trace("VF = "+register[0x0f]);
                     break;
                 case 0x05:
                     /*
@@ -292,14 +293,14 @@ public class Interpreter
                     // vf set to 1 if borrows
                     register[0x0f] = register[dst] > register[src] ? 1 : 0;
                     register[dst] = (register[dst] - register[src] ) & 0xff;
-                    trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
-                    trace("VF = "+register[0x0f]);
+                    if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
+                    if ( TRACE ) trace("VF = "+register[0x0f]);
                     break;
                 case 0x06:
                     // 0x8r06 	shr vr 	shift register vy right, bit 0 goes into register vf
                     register[0x0f] = register[dst] & 1;
                     register[dst] >>>= 1;
-                    trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
+                    if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
                     break;
                 case 0x07:
                     /*
@@ -310,15 +311,15 @@ public class Interpreter
                      */
                     register[0x0f] = register[src] > register[dst] ? 1 : 0;
                     register[dst] = (register[src] - register[dst] ) & 0xff;
-                    trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
-                    trace("VF = "+register[0x0f]);
+                    if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
+                    if ( TRACE ) trace("VF = "+register[0x0f]);
                     break;
                 case 0x0e:
                     // 0x8r0e 	shl vr 	shift register vr left,bit 7 goes into register vf
                     register[0x0f] = (register[dst] & 0b1000_0000) >>> 7;
                     register[dst] = (register[dst] << 1) & 0xff;
-                    trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
-                    trace("VF = "+register[0x0f]);
+                    if ( TRACE ) trace("Register "+dst+" = 0x"+Integer.toHexString( register[dst] ) );
+                    if ( TRACE ) trace("VF = "+register[0x0f]);
                     break;
                 default:
                     throw new RuntimeException("Unhandled opcode: 0x"+Integer.toHexString(cmd<<8|data) );
@@ -329,7 +330,7 @@ public class Interpreter
             int r0 = cmd & 0x0f;
             int r1 = (data & 0xf0)>>>4;
             final boolean skip = register[r0] != register[r1];
-            trace("skip: "+skip+" ( "+Integer.toHexString( register[r0] )+" <> "+Integer.toHexString( register[r1] ) );
+            if ( TRACE ) trace("skip: "+skip+" ( "+Integer.toHexString( register[r0] )+" <> "+Integer.toHexString( register[r1] ) );
             if ( skip ) {
                 pc += 2;
             }
@@ -337,7 +338,7 @@ public class Interpreter
         else if ( (cmd & 0xf0) == 0xa0 ) {
             // 0xaxxx 	mvi xxx 	Load index register with constant xxx
             index = (cmd & 0x0f)<<8 | (data & 0xff);
-            trace("Index: 0x"+Integer.toHexString( index ) );
+            if ( TRACE ) trace("Index: 0x"+Integer.toHexString( index ) );
         }
         else if ( (cmd & 0xf0) == 0xb0 ) {
             // 0xbxxx 	jmi xxx 	Jump to address xxx+register v0
@@ -357,12 +358,12 @@ public class Interpreter
             int height = (data & 0x0f);
             if ( height != 0x00 )
             {
-                trace("drawSprite @ 0x"+Integer.toHexString( index )+": x="+x+",y="+y+",h="+height);
+                if ( TRACE ) trace("drawSprite @ 0x"+Integer.toHexString( index )+": x="+x+",y="+y+",h="+height);
                 register[0x0f] = screen.drawSprite(x,y,height,index) ? 1 : 0;
             }
             else
             {
-                trace("drawSpriteExt @ 0x"+Integer.toHexString( index )+": x="+x+",y="+y);
+                if ( TRACE ) trace("drawSpriteExt @ 0x"+Integer.toHexString( index )+": x="+x+",y="+y);
                 // 0xdry0 	xsprite rx,ry 	Draws extended sprite at screen location rx,ry
                 // As above,but sprite is always 16 x 16. Superchip only, not yet implemented
                 register[0x0f] = screen.drawExtendedSprite(x,y,index) ? 1 : 0;
@@ -376,7 +377,7 @@ public class Interpreter
                 // 0xek9e 	skpr k 	skip if key (register rk) pressed
                 // The key is a key number, see the chip-8 documentation
                 final boolean pressed = keyboard.isKeyPressed( key );
-                trace("keyPressed( "+key+") => "+pressed);
+                if ( TRACE ) trace("keyPressed( "+key+") => "+pressed);
                 if ( pressed )
                 {
                     pc += 2;
@@ -386,7 +387,7 @@ public class Interpreter
             {
                 // 0xeka1 	skup k 	skip if key (register rk) not pressed
                 final boolean notPressed = !keyboard.isKeyPressed( key );
-                trace("keyNotPressed( "+key+") => "+notPressed);
+                if ( TRACE ) trace("keyNotPressed( "+key+") => "+notPressed);
                 if ( notPressed )
                 {
                     pc += 2;
@@ -402,36 +403,36 @@ public class Interpreter
             {
                 case 0x07:   // 0xfr07	gdelay vr 	get delay timer into vr
                    register[r0] = delayTimer.value();
-                    trace("Register "+r0+" = "+Integer.toHexString( register[r0] ));
+                    if ( TRACE ) trace("Register "+r0+" = "+Integer.toHexString( register[r0] ));
                     break;
                 case 0x0a:   // 0xfr0a	key vr wait for keypress,put key in register vr
-                    trace("Waiting for keypress");
+                    if ( TRACE ) trace("Waiting for keypress");
                     waitForKey = true;
                     keyDestReg = r0;
                     break;
                 case 0x15:   // 0xfr15	sdelay vr 	set the delay timer to vr
                     delayTimer.setValue( register[r0] );
-                    trace("delay-timer = "+Integer.toHexString( register[r0] ) );
+                    if ( TRACE ) trace("delay-timer = "+Integer.toHexString( register[r0] ) );
                     waitForDelay = register[r0] > 0;
                     break;
                 case 0x18:   // 0xfr18	ssound vr 	set the sound timer to vr
                     soundTimer.setValue( register[r0] );
-                    trace("sound-timer = "+Integer.toHexString( register[r0] ) );
+                    if ( TRACE ) trace("sound-timer = "+Integer.toHexString( register[r0] ) );
                     screen.setBeep( register[ r0 ] > 0 );
                     break;
                 case 0x1e:   // 0xfr1e	adi vr add register vr to the index register
                     index = (index + register[ r0 ] ) & 0xfff;
-                    trace("Index = 0x"+Integer.toHexString( index ));
+                    if ( TRACE ) trace("Index = 0x"+Integer.toHexString( index ));
                     break;
                 case 0x29:   // 0xfr29	font vr 	point I to the sprite for hexadecimal character in vr
                              // Sprite is 5 bytes high
                     index = screen.getGlyphAddr( register[ r0 ] );
-                    trace("Index = 0x"+Integer.toHexString( index ));
+                    if ( TRACE ) trace("Index = 0x"+Integer.toHexString( index ));
                     break;
                 case 0x30:   // 0xfr30	xfont vr 	point I to the sprite for hexadecimal character in vr
                              // Sprite is 10 bytes high,Super only
                     index = screen.getGlyphAddrExt( register[ r0 ] );
-                    trace("Index = 0x"+Integer.toHexString( index ));
+                    if ( TRACE ) trace("Index = 0x"+Integer.toHexString( index ));
                     break;
                 case 0x33:   // 0xfr33	bcd vr 	store the bcd representation of register vr at
                              // // location I,I+1,I+2
@@ -439,21 +440,21 @@ public class Interpreter
                     String value = Integer.toString( register[r0]);
                     value = StringUtils.leftPad(value,3,'0');
 
-                    trace("Writing '"+value+"' @ 0x"+Integer.toHexString( index ) );
+                    if ( TRACE ) trace("Writing '"+value+"' @ 0x"+Integer.toHexString( index ) );
                     memory.write( index , value.charAt(0) );
                     memory.write( index+1 , value.charAt(1) );
                     memory.write( index+2 , value.charAt(2) );
                     break;
                 case 0x55:   // 0xfr55	str v0-vr 	store registers v0-vr at location I onwards
                              // I is incremented to point to the next location on. e.g. I = I + r + 1
-                    trace("Storing registers r0-r"+r0+"' @ 0x"+Integer.toHexString( index ) );
+                    if ( TRACE ) trace("Storing registers r0-r"+r0+"' @ 0x"+Integer.toHexString( index ) );
                     for ( int i = 0,ptr = index ; i <= r0 ; ) {
                         memory.write( ptr++, register[i++] );
                     }
                     index = (index + r0 + 1 ) & 0xfff;
                     break;
                 case 0x65:   // 0xfx65	ldr v0-vr 	load registers v0-vr from location I onwards as above.
-                    trace("Loading registers r0-r"+r0+"' from 0x"+Integer.toHexString( index ) );
+                    if ( TRACE ) trace("Loading registers r0-r"+r0+"' from 0x"+Integer.toHexString( index ) );
                     for ( int i = 0,ptr = index ; i <= r0 ; ) {
                         register[i++] = memory.read( ptr++ );
                     }
