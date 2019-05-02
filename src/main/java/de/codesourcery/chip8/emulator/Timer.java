@@ -22,8 +22,10 @@ public abstract class Timer implements Runnable
     private final Object LOCK = new Object();
 
     // @GuardedBy( LOCK )
-    private volatile boolean active;
-    private volatile int value;
+    private boolean active;
+
+    // @GuardedBy( LOCK )
+    private int value;
 
     public Timer(String name)
     {

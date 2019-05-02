@@ -24,6 +24,9 @@ public class SixtyHertzTimer extends Thread
 
     private int modificationCount = 0;
 
+    private volatile boolean terminate;
+    private final Object SLEEP_LOCK = new Object();
+
     public SixtyHertzTimer()
     {
         setDaemon(true);
@@ -53,7 +56,7 @@ public class SixtyHertzTimer extends Thread
     {
         int modCount = -1;
         Runnable[] copy = new Runnable[0];
-        while ( true )
+        while ( ! terminate )
         {
             synchronized (listeners)
             {
@@ -74,7 +77,27 @@ public class SixtyHertzTimer extends Thread
             {
                 try { copy[i].run(); } catch (RuntimeException e) { e.printStackTrace(); }
             }
-            try { Thread.sleep( 1000 / 60 );  } catch (InterruptedException e) { e.printStackTrace(); }
+            try
+            {
+                synchronized(SLEEP_LOCK)
+                {
+                    if (!terminate)
+                    {
+                        SLEEP_LOCK.wait(1000 / 60);
+                    }
+                }
+            }
+            catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void terminate()
+    {
+        terminate = true;
+        synchronized (SLEEP_LOCK) {
+            SLEEP_LOCK.notifyAll();
         }
     }
 }

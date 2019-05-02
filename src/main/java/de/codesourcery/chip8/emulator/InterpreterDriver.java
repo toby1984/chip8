@@ -45,6 +45,9 @@ public class InterpreterDriver
     private final Breakpoints enabledBreakpoints = new Breakpoints( 4096 );
     private final Breakpoints disabledBreakpoints = new Breakpoints( 4096 );
 
+    private final BlockingQueue<Runnable> shutdownListeners =
+        new ArrayBlockingQueue<>(100);
+
     private final BlockingQueue<IDriverCallback> tickListeners =
             new ArrayBlockingQueue<>(100);
 
@@ -269,7 +272,8 @@ public class InterpreterDriver
 
     public void terminate()
     {
-        thread.submit(new Cmd(CmdType.TERMINATE,() -> {} ) );
+        shutdownListeners.forEach(x -> { try { x.run(); } catch(Exception e) {} } );
+        execute(CmdType.TERMINATE);
     }
 
     public void step()
@@ -399,5 +403,10 @@ public class InterpreterDriver
                 disabledBreakpoints.add( bp );
             }
         });
+    }
+
+    public void addShutdownListener(Runnable r)
+    {
+        this.shutdownListeners.add( r );
     }
 }

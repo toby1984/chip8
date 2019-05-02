@@ -146,6 +146,8 @@ public class Main
         final Interpreter ip = new Interpreter( memory,screen,keyboard, soundTimer, delayTimer, hook);
         driver = new InterpreterDriver(ip);
 
+        driver.addShutdownListener(() -> timer60Hz.terminate() );
+
         timer60Hz.addListener(soundTimer);
         timer60Hz.addListener(delayTimer);
         timer60Hz.start();
