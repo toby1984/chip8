@@ -15,6 +15,8 @@
  */
 package de.codesourcery.chip8;
 
+import de.codesourcery.chip8.emulator.Memory;
+
 import java.util.ArrayList;
 import java.util.List;
 

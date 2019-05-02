@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.codesourcery.chip8;
+package de.codesourcery.chip8.ui;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -23,18 +23,22 @@ import java.awt.Point;
 import java.io.File;
 import java.util.Properties;
 
-final class ConfigSerializer
+public final class Configuration
 {
     private final Properties props;
     private MainFrame.ConfigKey configKey;
 
-    public ConfigSerializer(Properties props) {
-        this(props, MainFrame.ConfigKey.GLOBAL);
-    }
-
-    public ConfigSerializer(Properties props, MainFrame.ConfigKey configKey) {
+    private Configuration(Properties props, MainFrame.ConfigKey configKey) {
         this.props = props;
         this.configKey = configKey;
+    }
+
+    public static Configuration of(Properties props) {
+        return new Configuration(props, MainFrame.ConfigKey.GLOBAL);
+    }
+
+    public static Configuration of(Properties props, MainFrame.ConfigKey configKey) {
+        return new Configuration(props,configKey);
     }
 
     private String prop(String name) {
@@ -109,7 +113,7 @@ final class ConfigSerializer
 
     public static void applyWindowState(Properties props, MainFrame.ConfigKey configKey, Component comp)
     {
-        final ConfigSerializer wrapper = new ConfigSerializer(props, configKey );
+        final Configuration wrapper = new Configuration(props, configKey );
         comp.setSize( wrapper.getSize(new Dimension(200,100 ) ) );
         comp.setLocation( wrapper.getLocation(new Point(0,0 ) ) );
         comp.setVisible( wrapper.isEnabled(true ) );
@@ -143,7 +147,7 @@ final class ConfigSerializer
 
     public static void saveWindowState(Properties props, MainFrame.ConfigKey configKey, Component comp)
     {
-        final ConfigSerializer wrapper = new ConfigSerializer(props, configKey );
+        final Configuration wrapper = new Configuration(props, configKey );
         wrapper.setSize( comp.getSize() );
         wrapper.setLocation( comp.getLocation() );
         wrapper.setEnabled( comp.isVisible() );

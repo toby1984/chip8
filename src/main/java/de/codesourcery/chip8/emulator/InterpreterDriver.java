@@ -13,16 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.codesourcery.chip8;
+package de.codesourcery.chip8.emulator;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 
 public class InterpreterDriver
 {
-    public final Interpreter interpreter;
-
+    public enum Reason {
+        STOPPED,
+        STARTED,
+        STOPPED_BREAKPOINT
+    }
     @FunctionalInterface
     public interface IDriverCallback
     {
@@ -32,8 +37,13 @@ public class InterpreterDriver
     @FunctionalInterface
     public interface IStateListener
     {
-        void stateChanged(InterpreterDriver controller, boolean newState);
+        void stateChanged(InterpreterDriver controller, Reason reason);
     }
+
+    public final Interpreter interpreter;
+
+    private final Breakpoints enabledBreakpoints = new Breakpoints( 4096 );
+    private final Breakpoints disabledBreakpoints = new Breakpoints( 4096 );
 
     private final BlockingQueue<IDriverCallback> tickListeners =
             new ArrayBlockingQueue<>(100);
@@ -104,6 +114,7 @@ public class InterpreterDriver
 
         private void doRun()
         {
+            final Breakpoint[] buffer = new Breakpoint[2]; // at most one temp. + one non-temp breakpoint per address
             while( true)
             {
                 Cmd cmd;
@@ -139,21 +150,35 @@ public class InterpreterDriver
                             running = false;
                             interpreter.reset();
                             invokeTickListeners();
-                            invokeStateListeners( false );
+                            invokeStateListeners( Reason.STOPPED);
                             continue;
                         case START:
                             running = true;
-                            invokeStateListeners( true );
+                            invokeStateListeners( Reason.STARTED);
                             continue;
                         case STOP:
                             running = false;
-                            invokeStateListeners( false );
+                            invokeStateListeners( Reason.STOPPED);
                             continue;
                         case STEP:
-                            invokeStateListeners( true );
+                            invokeStateListeners( Reason.STARTED);
                             break;
                     }
                 }
+
+                if ( enabledBreakpoints.isNotEmpty() )
+                {
+                    final int cnt =
+                            enabledBreakpoints.getBreakpoints( interpreter.pc, buffer );
+                    if ( cnt > 0 )
+                    {
+                        running = false;
+                        invokeStateListeners( Reason.STOPPED_BREAKPOINT );
+                        invokeTickListeners();
+                    }
+                    continue;
+                }
+
                 boolean stateListenersInvoked = false;
                 boolean tickListenersInvoked = false;
                 try
@@ -165,7 +190,7 @@ public class InterpreterDriver
                     e.printStackTrace();
                     running = false;
                     stateListenersInvoked = true;
-                    invokeStateListeners( false );
+                    invokeStateListeners( Reason.STOPPED );
                 }
                 if ( (cycleCount++ % tickInterval) == 0 )
                 {
@@ -180,7 +205,7 @@ public class InterpreterDriver
                     }
                     if (! stateListenersInvoked )
                     {
-                        invokeStateListeners( false );
+                        invokeStateListeners( Reason.STOPPED);
                     }
                 } else {
                     delay();
@@ -188,13 +213,13 @@ public class InterpreterDriver
             }
         }
 
-        private void invokeStateListeners(boolean newState)
+        private void invokeStateListeners(Reason reason)
         {
             stateListeners.forEach( l ->
             {
                 try
                 {
-                    l.stateChanged( InterpreterDriver.this, newState );
+                    l.stateChanged( InterpreterDriver.this, reason );
                 }
                 catch(Exception e)
                 {
@@ -254,7 +279,13 @@ public class InterpreterDriver
 
     public void runOnThread(IDriverCallback callback)
     {
-        thread.submit(new Cmd(CmdType.RUN, () -> callback.invoke(this ) ) );
+        if ( Thread.currentThread() == thread ) {
+            callback.invoke( this);
+        }
+        else
+        {
+            thread.submit( new Cmd( CmdType.RUN, () -> callback.invoke( this ) ) );
+        }
     }
 
     private void execute(CmdType type)
@@ -284,5 +315,58 @@ public class InterpreterDriver
 
     public void removeStateListener(IStateListener listener) {
         this.stateListeners.remove( listener );
+    }
+
+    public List<Breakpoint> getAllBreakpoints()
+    {
+        final List<Breakpoint> list = new ArrayList<>();
+
+        runOnThread( ip -> {
+            synchronized(list)
+            {
+                enabledBreakpoints.getAll( list );
+                disabledBreakpoints.getAll( list );
+            }
+        });
+        synchronized(list)
+        {
+            return list;
+        }
+    }
+
+    public void addBreakpoint(Breakpoint bp,boolean enabled)
+    {
+        runOnThread( ip -> {
+            enabledBreakpoints.remove( bp );
+            disabledBreakpoints.remove( bp );
+            if ( enabled ) {
+                enabledBreakpoints.add(bp);
+            } else {
+                disabledBreakpoints.add(bp);
+            }
+        });
+    }
+
+    public void removeBreakpoint(Breakpoint bp)
+    {
+        runOnThread( ip -> {
+            enabledBreakpoints.remove( bp );
+            disabledBreakpoints.remove( bp );
+        });
+    }
+
+    public void changeState(Breakpoint bp,boolean enable)
+    {
+        runOnThread( ip ->
+        {
+            if ( enable )
+            {
+                disabledBreakpoints.remove( bp );
+                enabledBreakpoints.add(bp);
+            } else {
+                enabledBreakpoints.remove( bp );
+                disabledBreakpoints.add( bp );
+            }
+        });
     }
 }

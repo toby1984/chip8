@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.codesourcery.chip8;
+package de.codesourcery.chip8.emulator;
 
+import de.codesourcery.chip8.Disassembler;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 

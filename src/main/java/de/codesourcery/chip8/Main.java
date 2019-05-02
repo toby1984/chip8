@@ -15,6 +15,16 @@
  */
 package de.codesourcery.chip8;
 
+import de.codesourcery.chip8.emulator.Interpreter;
+import de.codesourcery.chip8.emulator.InterpreterDriver;
+import de.codesourcery.chip8.emulator.Keyboard;
+import de.codesourcery.chip8.emulator.Memory;
+import de.codesourcery.chip8.emulator.Screen;
+import de.codesourcery.chip8.emulator.SixtyHertzTimer;
+import de.codesourcery.chip8.emulator.Timer;
+import de.codesourcery.chip8.ui.Configuration;
+import de.codesourcery.chip8.ui.MainFrame;
+
 import javax.swing.SwingUtilities;
 import java.io.File;
 import java.io.FileInputStream;
@@ -109,7 +119,7 @@ public class Main
         {
             try
             {
-                final File file = new ConfigSerializer( configProvider.load() , MainFrame.ConfigKey.GLOBAL ).getLastBinary();
+                final File file = Configuration.of( configProvider.load() , MainFrame.ConfigKey.GLOBAL ).getLastBinary();
                 if ( file != null )
                 {
                         try ( FileInputStream in = new FileInputStream(file) )

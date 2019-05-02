@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.codesourcery.chip8;
+package de.codesourcery.chip8.ui;
 
+import de.codesourcery.chip8.Disassembler;
 import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.emulator.Interpreter;
+import de.codesourcery.chip8.emulator.InterpreterDriver;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 
@@ -67,7 +70,7 @@ import java.util.stream.Stream;
 
 public class MainFrame extends JFrame
 {
-    enum ConfigKey
+    public enum ConfigKey
     {
         // data
         GLOBAL("global","Global Configuration",false),
@@ -129,8 +132,7 @@ public class MainFrame extends JFrame
         final JDesktopPane desktop = new JDesktopPane();
         windows.forEach( win ->
         {
-            System.out.println("Window: "+win.getTitle());
-            ConfigSerializer.applyWindowState(config, win.configKey,win);
+            Configuration.applyWindowState(config, win.configKey,win);
             win.invoke( driver );
             desktop.add( win );
         });
@@ -138,7 +140,7 @@ public class MainFrame extends JFrame
         setContentPane( desktop );
         setSize( new Dimension(640,400) );
         setDefaultCloseOperation( JFrame.DISPOSE_ON_CLOSE );
-        ConfigSerializer.applyWindowState(config, ConfigKey.MAINFRAME, MainFrame.this);
+        Configuration.applyWindowState(config, ConfigKey.MAINFRAME, MainFrame.this);
         setVisible( true );
         setLocationRelativeTo( null );
         addWindowListener(new WindowAdapter() {@Override public void windowClosing(WindowEvent e) { quit(); } } );
@@ -279,7 +281,7 @@ public class MainFrame extends JFrame
                 resetButton.addActionListener( ev -> driver.reset() );
                 loadButton.addActionListener( ev ->
                 {
-                    final ConfigSerializer serializer = new ConfigSerializer(config);
+                    final Configuration serializer = Configuration.of(config);
                     final File file = serializer.getLastBinary();
                     final File selected = selectFileOpen(file);
                     if ( selected != null )
@@ -441,7 +443,6 @@ public class MainFrame extends JFrame
                 @Override public Class<?> getColumnClass(int columnIndex) { return String.class; }
                 @Override public boolean isCellEditable(int rowIndex, int columnIndex) { return false; }
 
-
                 @Override
                 public Object getValueAt(int rowIndex, int columnIndex)
                 {
@@ -461,7 +462,7 @@ public class MainFrame extends JFrame
 
                 save.addActionListener( ev -> {
 
-                    final File last = new ConfigSerializer(config).getLastSource();
+                    final File last = Configuration.of(config).getLastSource();
                     final File file = selectFileSave(last);
                     if ( file != null )
                     {
@@ -470,7 +471,7 @@ public class MainFrame extends JFrame
                             final String text = source.getText();
                             w.write(text==null ? "": text );
                             System.out.println("Saved source to "+file.getAbsolutePath());
-                            new ConfigSerializer(config).setLastSource(file);
+                            Configuration.of(config).setLastSource(file);
                             configProvider.save();
                         }
                         catch (IOException e)
@@ -483,7 +484,7 @@ public class MainFrame extends JFrame
 
                 load.addActionListener(ev ->
                 {
-                    final File last = new ConfigSerializer(config).getLastSource();
+                    final File last = Configuration.of(config).getLastSource();
                     final File file = selectFileOpen(last);
                     if ( file != null )
                     {
@@ -518,7 +519,7 @@ public class MainFrame extends JFrame
                 cnstrs.fill = GridBagConstraints.BOTH;
                 getContentPane().add( new JScrollPane(table), cnstrs );
 
-                final File last = new ConfigSerializer(config).getLastSource();
+                final File last = Configuration.of(config).getLastSource();
                 if ( last != null ) {
                     loadSource(last);
                 }
@@ -526,7 +527,7 @@ public class MainFrame extends JFrame
 
             private void loadSource(File file)
             {
-                new ConfigSerializer(config).setLastSource(file);
+                Configuration.of(config).setLastSource(file);
                 configProvider.save();
 
                 final String src;
@@ -641,7 +642,7 @@ public class MainFrame extends JFrame
                 .forEach( w ->
                 {
                     w.setVisible( !w.isVisible() );
-                    ConfigSerializer.saveWindowState( config, configKey,w);
+                    Configuration.saveWindowState( config, configKey,w);
                 });
 
         configProvider.save();
@@ -682,8 +683,8 @@ public class MainFrame extends JFrame
             swingTimer.stop();
         }
         driver.terminate();
-        windows.forEach(win -> ConfigSerializer.saveWindowState(config, win.configKey,win) );
-        ConfigSerializer.saveWindowState(config, ConfigKey.MAINFRAME, MainFrame.this);
+        windows.forEach(win -> Configuration.saveWindowState(config, win.configKey,win) );
+        Configuration.saveWindowState(config, ConfigKey.MAINFRAME, MainFrame.this);
         configProvider.save();
         dispose();
     }

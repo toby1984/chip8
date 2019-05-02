@@ -13,7 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package de.codesourcery.chip8;
+package de.codesourcery.chip8.ui;
+
+import de.codesourcery.chip8.emulator.Keyboard;
+import de.codesourcery.chip8.emulator.Screen;
 
 import javax.swing.JPanel;
 import java.awt.Color;
