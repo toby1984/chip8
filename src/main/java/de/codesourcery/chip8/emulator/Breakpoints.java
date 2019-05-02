@@ -64,33 +64,32 @@ public class Breakpoints
         return nonTemporary[slotNo];
     }
 
-    public int getBreakpoints(int address, Breakpoint[] destination)
+    public boolean checkBreakpointHit(int address)
     {
+        if ( size == 0 ) {
+            return false;
+        }
         final int slotNo = address % SLOTS;
-        int index = 0;
+        Map<Integer, Breakpoint> map = temporary[slotNo];
         Integer key = null;
-        Map<Integer, Breakpoint> map = nonTemporary[slotNo];
         if ( ! map.isEmpty() )
         {
             key = address;
-            final Breakpoint bp = map.get( key );
-            if ( bp != null ) {
-                destination[index++] = bp;
+            if ( map.containsKey( key ) )
+            {
+                map.remove( key );
+                return true;
             }
         }
-        map = temporary[slotNo];
+        map = nonTemporary[slotNo];
         if ( ! map.isEmpty() )
         {
-            if ( key == null )
-            {
+            if ( key == null ) {
                 key = address;
             }
-            final Breakpoint bp = map.get( key );
-            if ( bp != null ) {
-                destination[index++] = bp;
-            }
+            return map.containsKey( key );
         }
-        return index;
+        return false;
     }
 
     public void clear()

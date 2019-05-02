@@ -166,16 +166,11 @@ public class InterpreterDriver
                     }
                 }
 
-                if ( enabledBreakpoints.isNotEmpty() )
+                if ( enabledBreakpoints.checkBreakpointHit(interpreter.pc ) )
                 {
-                    final int cnt =
-                            enabledBreakpoints.getBreakpoints( interpreter.pc, buffer );
-                    if ( cnt > 0 )
-                    {
-                        running = false;
-                        invokeStateListeners( Reason.STOPPED_BREAKPOINT );
-                        invokeTickListeners();
-                    }
+                    running = false;
+                    invokeStateListeners( Reason.STOPPED_BREAKPOINT );
+                    invokeTickListeners();
                     continue;
                 }
 
