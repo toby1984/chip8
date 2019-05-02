@@ -57,7 +57,7 @@ public class Breakpoints
 
     private Map<Integer,Breakpoint> getMap(int address, boolean isTemporary)
     {
-        final int slotNo = address & SLOTS;
+        final int slotNo = address % SLOTS;
         if ( isTemporary ) {
             return temporary[slotNo];
         }
@@ -103,5 +103,15 @@ public class Breakpoints
     {
         Stream.of( temporary ).forEach( map -> destination.addAll( map.values() ) );
         Stream.of( nonTemporary ).forEach( map -> destination.addAll( map.values() ) );
+    }
+
+    public boolean contains(Breakpoint bp)
+    {
+        final int slotNo = bp.address % SLOTS;
+        final Integer key = bp.address;
+        if ( bp.isTemporary ) {
+            return temporary[ slotNo ].containsKey(key);
+        }
+        return nonTemporary[ slotNo ].containsKey(key);
     }
 }

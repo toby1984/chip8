@@ -115,6 +115,7 @@ public class InterpreterDriver
         private void doRun()
         {
             final Breakpoint[] buffer = new Breakpoint[2]; // at most one temp. + one non-temp breakpoint per address
+            boolean ignoreBreakpoint = false;
             while( true)
             {
                 Cmd cmd;
@@ -153,6 +154,7 @@ public class InterpreterDriver
                             invokeStateListeners( Reason.STOPPED);
                             continue;
                         case START:
+                            ignoreBreakpoint = ! running;
                             running = true;
                             invokeStateListeners( Reason.STARTED);
                             continue;
@@ -161,18 +163,21 @@ public class InterpreterDriver
                             invokeStateListeners( Reason.STOPPED);
                             continue;
                         case STEP:
+                            ignoreBreakpoint = ! running;
                             invokeStateListeners( Reason.STARTED);
                             break;
                     }
                 }
 
-                if ( enabledBreakpoints.checkBreakpointHit(interpreter.pc ) )
+                if ( ! ignoreBreakpoint && enabledBreakpoints.checkBreakpointHit(interpreter.pc ) )
                 {
                     running = false;
                     invokeStateListeners( Reason.STOPPED_BREAKPOINT );
                     invokeTickListeners();
                     continue;
                 }
+
+                ignoreBreakpoint = false;
 
                 boolean stateListenersInvoked = false;
                 boolean tickListenersInvoked = false;
@@ -279,7 +284,23 @@ public class InterpreterDriver
         }
         else
         {
-            thread.submit( new Cmd( CmdType.RUN, () -> callback.invoke( this ) ) );
+            final CountDownLatch latch = new CountDownLatch(1);
+            thread.submit( new Cmd( CmdType.RUN, () ->
+            {
+                try
+                {
+                    callback.invoke(this);
+                } finally {
+                    latch.countDown();
+                }
+            }));
+            try
+            {
+                latch.await();
+            }
+            catch(InterruptedException e) {
+                /* can't help it */
+            }
         }
     }
 
@@ -347,6 +368,21 @@ public class InterpreterDriver
         runOnThread( ip -> {
             enabledBreakpoints.remove( bp );
             disabledBreakpoints.remove( bp );
+        });
+    }
+
+    public void toggle(Breakpoint bp)
+    {
+        runOnThread(ip ->
+        {
+            if ( enabledBreakpoints.contains(bp) || disabledBreakpoints.contains(bp) ) {
+                enabledBreakpoints.remove(bp);
+                disabledBreakpoints.remove(bp);
+            }
+            else
+            {
+                enabledBreakpoints.add(bp);
+            }
         });
     }
 

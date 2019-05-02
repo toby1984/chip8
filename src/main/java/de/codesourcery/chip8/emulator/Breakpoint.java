@@ -28,4 +28,13 @@ public final class Breakpoint
     {
         return Objects.hash( address, isTemporary );
     }
+
+    @Override
+    public String toString()
+    {
+        if ( isTemporary ) {
+            return "Temporary breakpoint @ 0x"+Integer.toHexString(address);
+        }
+        return "Breakpoint @ 0x"+Integer.toHexString(address);
+    }
 }

@@ -17,6 +17,7 @@ package de.codesourcery.chip8.ui;
 
 import de.codesourcery.chip8.Disassembler;
 import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.emulator.Breakpoint;
 import de.codesourcery.chip8.emulator.Interpreter;
 import de.codesourcery.chip8.emulator.InterpreterDriver;
 import org.apache.commons.lang3.StringUtils;
@@ -46,6 +47,8 @@ import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Toolkit;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.ByteArrayOutputStream;
@@ -60,10 +63,13 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -188,7 +194,7 @@ public class MainFrame extends JFrame
         public void invoke(InterpreterDriver controller) { }
 
         @Override
-        public void stateChanged(InterpreterDriver controller, boolean newState) { }
+        public void stateChanged(InterpreterDriver controller, InterpreterDriver.Reason reason) { }
     }
 
     private List<MyFrame> createFrames()
@@ -314,10 +320,11 @@ public class MainFrame extends JFrame
             }
 
             @Override
-            public void stateChanged(InterpreterDriver controller, boolean isRunning)
+            public void stateChanged(InterpreterDriver controller, InterpreterDriver.Reason reason)
             {
                 SwingUtilities.invokeLater(  () ->
                 {
+                    final boolean isRunning = reason == InterpreterDriver.Reason.STARTED;
                     startButton.setEnabled( !isRunning );
                     stopButton.setEnabled( isRunning );
                     stepButton.setEnabled( !isRunning );
@@ -369,33 +376,118 @@ public class MainFrame extends JFrame
     {
         return new MyFrame("Disasm", ConfigKey.DISASM, true,false) {
 
-            private final StringBuilder buffer = new StringBuilder();
-            private final JTextArea area = new JTextArea();
+            // @GuardedBy( lines )
+            private int startAddress;
+            // @GuardedBy( lines )
+            private int currentPC;
+
+            // @GuardedBy( lines )
+            private final List<String> lines = new ArrayList<>();
+
+            private void toggleBreakpoint(int address) {
+                driver.toggle(new Breakpoint(address,false) );
+                driver.runOnThread(this );
+            }
+
+            private final JPanel panel = new JPanel() {
+
+                {
+                    addMouseListener(new MouseAdapter()
+                    {
+                        @Override
+                        public void mouseClicked(MouseEvent e)
+                        {
+                            final int h = getFontMetrics(getFont()).getHeight();
+                            int row = e.getY()/ h;
+                            boolean toggle=false;
+                            int bpAddress=0;
+                            synchronized(lines)
+                            {
+                                if (row >= 0 && row < lines.size())
+                                {
+                                    toggle = true;
+                                    bpAddress = startAddress + row * 2;
+                                }
+                            }
+                            if ( toggle ) {
+                                toggleBreakpoint(bpAddress);
+                            }
+                        }
+                    });
+                }
+                @Override
+                protected void paintComponent(Graphics g)
+                {
+                    System.out.println("Repainting");
+                    super.paintComponent(g);
+                    final int fontHeight = g.getFontMetrics().getHeight();
+                    int x0 = 0;
+                    int y0 = fontHeight;
+
+                    final Map<Integer, Breakpoint> bps = new HashMap<>();
+                    driver.runOnThread(ip ->
+                    {
+                        synchronized (bps)
+                        {
+                            ip.getAllBreakpoints().stream()
+                                .filter(x -> !x.isTemporary)
+                                .forEach(x -> bps.put(x.address, x));
+                            System.out.println( "Breakpoints:");
+                            System.out.println( bps.values() );
+                        }
+                    });
+                    synchronized (lines)
+                    {
+                        synchronized (bps)
+                        {
+                            int address = startAddress;
+                            System.out.println("Address: "+address+" / current PC: "+currentPC);
+                            for (String line : lines)
+                            {
+                                final String pcMarker = address == currentPC ? " >> " : "    ";
+                                if (bps.containsKey(address))
+                                {
+                                    g.drawString("[B]" + pcMarker + line, x0, y0);
+                                }
+                                else
+                                {
+                                    g.drawString("[ ]" + pcMarker + line, x0, y0);
+                                }
+                                y0 += fontHeight;
+                                address += 2;
+                            }
+                        }
+                    }
+                }
+            };
 
             {
-                area.setEditable( false );
-                getContentPane().add( area );
-                configure(area);
+                getContentPane().add( panel );
+                configure(panel);
             }
 
             @Override
             public void invoke(InterpreterDriver controller)
             {
-                final Interpreter interpreter = controller.interpreter;
-                int start = Math.max(0,interpreter.pc-8);
-                final List<String> lines = Disassembler.disAsm( interpreter.memory,start,16 );
-                buffer.setLength(0);
-                for (int i = 0, linesSize = lines.size(); i < linesSize; i++,start+=2)
+                synchronized(this.lines)
                 {
-                    if ( start != interpreter.pc ) {
-                        buffer.append("____");
+                    final Interpreter interpreter = controller.interpreter;
+                    this.currentPC = interpreter.pc;
+
+                    final int displayStart;
+                    if ( Math.abs( currentPC - startAddress ) > 7 ) {
+                        displayStart = Math.max(0,currentPC-8);
                     } else {
-                        buffer.append(">>> ");
+                        displayStart = startAddress;
                     }
-                    buffer.append( lines.get( i ) );
+                    final List<String> lines = Disassembler.disAsm( interpreter.memory,displayStart,16 );
+
+                    this.startAddress = displayStart;
+                    this.lines.clear();
+                    this.lines.addAll( lines );
                 }
-                final String s = buffer.toString();
-                SwingUtilities.invokeLater( () -> area.setText( s ) );
+                System.out.println("Repaint queued");
+                panel.repaint();
             }
         };
     }
@@ -625,13 +717,13 @@ public class MainFrame extends JFrame
         final JMenu view = new JMenu( "View" );
 
         Stream.of( ConfigKey.values() ).filter( c -> c.isInternalFrame )
-                .sorted( Comparator.comparing( a -> a.displayName ) )
-                .forEach( key -> cbMenuItem(view, key.displayName, () ->
-                        getWindow( key )
-                                .map( Component::isVisible )
-                                .orElse( false ),
-                        () -> toggleVisibility( key ) )
-                );
+            .sorted( Comparator.comparing( a -> a.displayName ) )
+            .forEach( key -> cbMenuItem(view, key.displayName, () ->
+                                                                   getWindow( key )
+                                                                       .map( Component::isVisible )
+                                                                       .orElse( false ),
+                () -> toggleVisibility( key ) )
+            );
         bar.add( view );
         return bar;
     }
@@ -639,11 +731,11 @@ public class MainFrame extends JFrame
     private void toggleVisibility(ConfigKey configKey)
     {
         windows.stream().filter( x -> x.configKey.equals( configKey ) )
-                .forEach( w ->
-                {
-                    w.setVisible( !w.isVisible() );
-                    Configuration.saveWindowState( config, configKey,w);
-                });
+            .forEach( w ->
+            {
+                w.setVisible( !w.isVisible() );
+                Configuration.saveWindowState( config, configKey,w);
+            });
 
         configProvider.save();
     }
