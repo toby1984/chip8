@@ -147,6 +147,8 @@ public class Screen
      */
     public boolean drawSprite(int x, int y, int byteCount, int spriteAddr)
     {
+        x = x % mode.width();
+        y = y % mode.height();
         boolean pixelsCleared = false;
         int currentY = y;
         for ( int i = 0 ; i < byteCount ; i++ )
@@ -160,7 +162,15 @@ public class Screen
             )
             {
                 final boolean spriteBit = (data & mask)!=0;
-                final boolean screenBit = readPixel(currentX,currentY);
+                final boolean screenBit;
+                try
+                {
+                    screenBit = readPixel(currentX,currentY);
+                }
+                catch (RuntimeException e)
+                {
+                    throw e;
+                }
                 final boolean newValue = spriteBit ^ screenBit;
                 if ( newValue ) {
                     setPixel( currentX, currentY );

@@ -19,7 +19,9 @@ import de.codesourcery.chip8.Disassembler;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
@@ -29,6 +31,9 @@ public class Interpreter
     private static final boolean DEBUG = false;
     private static final boolean TRACE = false;
     private static final boolean TRACE_KEYBOARD = true;
+
+    private static final boolean CAPTURE_BACKTRACE = true;
+    private static final int BACKTRACE_SIZE = 16;
 
     public final Memory memory;
     public final Screen screen;
@@ -42,6 +47,10 @@ public class Interpreter
     public int index;
     public int register[] = new int[16];
     public int stack[] = new int[16];
+
+    private final int[] backtrace = new int[BACKTRACE_SIZE];
+    private int backtraceReadPtr = 0;
+    private int backtraceWritePtr = 0;
 
     // keyboard handling
     private enum KeyboardWaitState {
@@ -158,6 +167,14 @@ public class Interpreter
             keyboardWaitState = KeyboardWaitState.NONE;
             register[ keyDestReg ] = pressedKey;
             traceKeyboard("RELEASED: Key "+pressedKey);
+        }
+        if ( CAPTURE_BACKTRACE ) {
+            backtrace[ backtraceWritePtr ] = pc;
+            backtraceWritePtr++;
+            if ( backtraceWritePtr == BACKTRACE_SIZE ) {
+                backtraceWritePtr = 0;
+                backtraceReadPtr = (backtraceReadPtr+1) % BACKTRACE_SIZE;
+            }
         }
         executeInstruction();
     }
@@ -481,7 +498,21 @@ public class Interpreter
         }
     }
 
-    private void illegalInstruction(int cmd, int data) {
-        throw new RuntimeException("Unhandled opcode: 0x"+Integer.toHexString(cmd<<8|data) );
+    private void illegalInstruction(int cmd, int data)
+    {
+        if ( CAPTURE_BACKTRACE ) {
+
+            final List<Integer> trace = new ArrayList<>();
+            for ( int i = backtraceReadPtr ; i != backtraceWritePtr ; i = (i+1) % BACKTRACE_SIZE ) {
+                trace.add( backtrace[i] );
+            }
+            Collections.reverse(trace);
+            System.err.println("Unhandled opcode: 0x"+Integer.toHexString(cmd<<8|data));
+            System.err.println("\nBacktrace:\n");
+            for ( int adr : trace ) {
+                System.out.println("PC = 0x"+Integer.toHexString(adr ) );
+            }
+        }
+        throw new RuntimeException("Unhandled opcode: 0x"+Integer.toHexString(cmd<<8|data)+" at address 0x"+Integer.toHexString(pc-2));
     }
 }
