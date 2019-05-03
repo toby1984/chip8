@@ -259,8 +259,7 @@ public class MainFrame extends JFrame
         return new MyFrame("Screen", ConfigKey.SCREEN, false,false ) {
 
             {
-                final Panel p = new Panel( driver.interpreter.screen,
-                    driver.interpreter.keyboard );
+                final Panel p = new Panel( driver );
                 getContentPane().add( p );
                 final AtomicBoolean screenChanged = new AtomicBoolean();
                 swingTimer = new Timer(16, ev ->

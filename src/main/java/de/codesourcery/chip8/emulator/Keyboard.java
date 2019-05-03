@@ -22,51 +22,35 @@ public class Keyboard
 {
     public static final int NO_KEY = -1;
 
-    // @GuardedBy( pressedKeys )
     private final Set<Integer> pressedKeys = new HashSet<>();
 
     public void keyPressed(int key) {
         System.out.println("Pressed: "+key);
-        synchronized (pressedKeys)
-        {
-            pressedKeys.add( Integer.valueOf( key ) );
-        }
+        pressedKeys.add( Integer.valueOf( key ) );
     }
 
     public void keyReleased(int key)
     {
         System.out.println("Released: "+key);
-        synchronized (pressedKeys)
-        {
-            pressedKeys.remove( Integer.valueOf( key ) );
-        }
+        pressedKeys.remove( Integer.valueOf( key ) );
     }
 
     public boolean isKeyPressed(int key)
     {
-        synchronized (pressedKeys)
-        {
-            return pressedKeys.contains( Integer.valueOf( key ) );
-        }
+        return pressedKeys.contains( Integer.valueOf( key ) );
     }
 
     public int readKey()
     {
-        synchronized (pressedKeys)
+        if ( pressedKeys.isEmpty() )
         {
-            if ( pressedKeys.isEmpty() )
-            {
-                return NO_KEY;
-            }
-            return pressedKeys.iterator().next();
+            return NO_KEY;
         }
+        return pressedKeys.iterator().next();
     }
 
     public void reset()
     {
-        synchronized (pressedKeys)
-        {
-            pressedKeys.clear();
-        }
+        pressedKeys.clear();
     }
 }

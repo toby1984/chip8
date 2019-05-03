@@ -20,13 +20,15 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class InterpreterDriver
 {
-    private static final float INSTRUCTIONS_PER_SECOND = 1500;
+    private static boolean INVOKE_TICK_LISTENERS_WHILE_RUNNING = false;
+
     public static final int MAX_DELAY = 600000;
+
+    private static final int TICK_INTERVAL = 10000;
 
     public enum Reason {
         STOPPED,
@@ -81,27 +83,21 @@ public class InterpreterDriver
         }
     }
 
-    private final class ControllerThread extends Thread
+    public final class ControllerThread extends Thread
     {
         private final BlockingQueue<Cmd> cmdQueue =
                 new ArrayBlockingQueue<>(50,true);
 
-        private boolean running;
-        private long lastTimestamp;
-        private long cycleCount=0;
-        private long delay=1000;
-        private int tickInterval = 10000;
         private volatile boolean terminated;
+
+        private long delay=1000;
 
         public double dummyValue = 123;
 
-        private void setRunning(boolean newState, Reason reason)
+        private boolean setRunning(boolean oldState, boolean newState, Reason reason)
         {
-            final boolean oldState = running;
-            if ( ! oldState && newState) {
-                // start
-                cycleCount = 0;
-                lastTimestamp = System.nanoTime();
+            if ( ! oldState && newState)
+            {
                 invokeStateListeners( reason );
             }
             else if ( oldState && ! newState )
@@ -109,7 +105,7 @@ public class InterpreterDriver
                 invokeTickListeners();
                 invokeStateListeners( reason );
             }
-            this.running = newState;
+            return newState;
         }
 
         public void submit(Cmd cmd)
@@ -122,11 +118,16 @@ public class InterpreterDriver
 
         private void delay()
         {
-            double v = dummyValue;
-            for ( long i = delay ; i > 0 ; i--) {
-                v = v + v*1.35*i + v / 3.74;
+            long i = delay;
+            if ( i > 0 )
+            {
+                double v = dummyValue;
+                for ( ; i > 0 ; i--)
+                {
+                    v = v + v * 1.35 * i + v / 3.74;
+                }
+                dummyValue = v;
             }
-            dummyValue = v;
         }
 
         @Override
@@ -141,6 +142,9 @@ public class InterpreterDriver
 
         private void doRun()
         {
+            long cycleCount = 0;
+            long lastTimestamp = System.currentTimeMillis();
+            boolean running = false;
             boolean ignoreBreakpoint = false;
             while( true)
             {
@@ -160,7 +164,7 @@ public class InterpreterDriver
                     {
                         case TERMINATE:
                             terminated = true;
-                            setRunning( false , Reason.STOPPED);
+                            running = setRunning( running, false , Reason.STOPPED);
                             while( ( cmd = cmdQueue.poll() ) != null ) {
                                 cmd.onReceive(this);
                             }
@@ -168,26 +172,31 @@ public class InterpreterDriver
                         case RUN:
                             continue;
                         case RESET:
-                            setRunning( false , Reason.STOPPED);
+                            running = setRunning( running, false , Reason.STOPPED);
                             interpreter.reset();
                             continue;
+                        case STEP:
                         case START:
-                            ignoreBreakpoint = ! running;
-                            setRunning( true, Reason.STARTED );
+                            if ( ! running )
+                            {
+                                ignoreBreakpoint = true;
+                                running = setRunning( running,true, Reason.STARTED);
+                                cycleCount = 0;
+                                lastTimestamp = System.currentTimeMillis();
+                            }
+                            if ( cmd.type == CmdType.STEP) {
+                                break;
+                            }
                             continue;
                         case STOP:
-                            setRunning( false, Reason.STOPPED );
+                            running = setRunning( running, false, Reason.STOPPED );
                             continue;
-                        case STEP:
-                            ignoreBreakpoint = ! running;
-                            setRunning( true, Reason.STARTED);
-                            break;
                     }
                 }
 
                 if ( ! ignoreBreakpoint && enabledBreakpoints.checkBreakpointHit(interpreter.pc ) )
                 {
-                    setRunning( false , Reason.STOPPED_BREAKPOINT);
+                    running = setRunning( running, false , Reason.STOPPED_BREAKPOINT);
                     continue;
                 }
 
@@ -200,17 +209,22 @@ public class InterpreterDriver
                 catch(Exception e)
                 {
                     e.printStackTrace();
-                    setRunning( false, Reason.STOPPED );
+                    running = setRunning( running, false, Reason.STOPPED );
                     continue;
                 }
-                if ( (++cycleCount % tickInterval) == 0 )
+                if ( (++cycleCount % TICK_INTERVAL) == 0 )
                 {
-                    invokeTickListeners();
+//                    final float elapsedSeconds = (System.currentTimeMillis() - lastTimestamp)/1000f;
+//                    final long cyclesPerSecond = (long)(cycleCount/elapsedSeconds);
+//                    System.out.println("cycles per second: "+cyclesPerSecond);
+                    if ( INVOKE_TICK_LISTENERS_WHILE_RUNNING )
+                    {
+                        invokeTickListeners();
+                    }
                 }
                 if ( cmd != null && cmd.type == CmdType.STEP )
                 {
-                    System.out.println("Step");
-                    setRunning( false, Reason.STOPPED );
+                    running = setRunning( running, false, Reason.STOPPED );
                 } else {
                     delay();
                 }

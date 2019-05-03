@@ -32,7 +32,7 @@ public class Interpreter
     private static final boolean TRACE = false;
     private static final boolean TRACE_KEYBOARD = false;
 
-    private static final boolean CAPTURE_BACKTRACE = true;
+    private static final boolean CAPTURE_BACKTRACE = false;
     private static final int BACKTRACE_SIZE = 16;
 
     public final Memory memory;
@@ -203,16 +203,6 @@ public class Interpreter
             {
                 // 0x00EE 	rts 	return from subroutine call
                 pc = stack[ --sp ];
-            }
-            else if ( data == 0xfe )
-            {
-                // 0x00FE 	low 	disable extended screen mode 	Super only
-                screen.setExtendedMode( false );
-            }
-            else if ( data == 0xff )
-            {
-                // 0x00FF 	high 	enable extended screen mode (128 x 64) 	Super only
-                screen.setExtendedMode( true );
             }
             else
             {
@@ -446,11 +436,6 @@ public class Interpreter
                 case 0x29:   // 0xfr29	font vr 	point I to the sprite for hexadecimal character in vr
                              // Sprite is 5 bytes high
                     index = screen.getGlyphAddr( register[ r0 ] );
-                    if ( TRACE ) trace("Index = 0x"+Integer.toHexString( index ));
-                    break;
-                case 0x30:   // 0xfr30	xfont vr 	point I to the sprite for hexadecimal character in vr
-                             // Sprite is 10 bytes high,Super only
-                    index = screen.getGlyphAddrExt( register[ r0 ] );
                     if ( TRACE ) trace("Index = 0x"+Integer.toHexString( index ));
                     break;
                 case 0x33:   // 0xfr33	bcd vr 	store the bcd representation of register vr at

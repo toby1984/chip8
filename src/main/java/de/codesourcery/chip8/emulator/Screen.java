@@ -15,6 +15,8 @@
  */
 package de.codesourcery.chip8.emulator;
 
+import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -37,25 +39,19 @@ public class Screen
 {
     private static final int GLYPH_MEM_START = 0x000;
 
-    public enum Mode
-    {
-        DEFAULT {
-            @Override public int width() { return 64; }
-            @Override public int height() { return 32; }
-        },
-        EXTENDED {
-            @Override public int width() { return 128; }
-            @Override public int height() { return 64; }
-        };
-        public abstract int width();
-        public abstract int height();
-    }
+    public static final int WIDTH = 64;
+    public static final int HEIGHT = 32;
+    // Mask used to make sure out-of-range coordinates
+    // get mapped back to within the screen array
+    // (64*32)/8
+    public static final int PIXELARRAY_LENGTH_MASK = 0xff;
+
+    public static final int BYTES_PER_ROW = WIDTH/8;
 
     // enough data to hold either standard or extended mode display
-    private final byte[] data = new byte[ (128*64)/8 ];
+    private final byte[] data = new byte[ (WIDTH*HEIGHT)/8 ];
 
     private final Memory memory;
-    private Mode mode = Mode.DEFAULT;
     private boolean isBeeping;
     private final AtomicBoolean hasChanged = new AtomicBoolean(true);
 
@@ -96,19 +92,6 @@ public class Screen
         memory.write( glypPtr++, v4 );
     }
 
-    public Mode getMode()
-    {
-        return mode;
-    }
-
-    public byte[] getData() {
-        return data;
-    }
-
-    public int getBytesPerRow() {
-        return mode.width()/8;
-    }
-
     /**
      * Clear screen.
      */
@@ -116,16 +99,6 @@ public class Screen
     {
         Arrays.fill(data, (byte) 0);
         hasChanged.set(true);
-    }
-
-    /**
-     * Enable extended screen mode (128 x 64) (Super only).
-     *
-     * @param enabled
-     */
-    public void setExtendedMode(boolean enabled)
-    {
-        this.mode = enabled ? Mode.EXTENDED : Mode.DEFAULT;
     }
 
     /**
@@ -147,80 +120,61 @@ public class Screen
      */
     public boolean drawSprite(int x, int y, int byteCount, int spriteAddr)
     {
-        x = x % mode.width();
-        y = y % mode.height();
+        x = x % WIDTH;
+        y = y % HEIGHT;
         boolean pixelsCleared = false;
-        int currentY = y;
+
+        int rowStartByteOffset = x/8 + y * BYTES_PER_ROW;
+        final int scrBitOffset = x -(x/8)*8;
+        int scrSetMask = 0b1000_0000 >> scrBitOffset;
+        int scrClearMask = ~scrSetMask;
+
         for ( int i = 0 ; i < byteCount ; i++ )
         {
-            int data = memory.read( spriteAddr+i );
-            int mask = 0b1000_0000;
-            for ( int currentX = x, bit = 0 ; bit < 8 ;
-                  bit++,
-                  mask >>>= 1,
-                  currentX = (currentX+1) % mode.width()
-            )
+            int spriteData = memory.read( spriteAddr+i );
+            int spriteReadMask = 0b1000_0000;
+
+            int bitOffset = scrBitOffset;
+            int scrByteOffset = rowStartByteOffset;
+            int screenData = this.data[scrByteOffset];
+            for ( int bit = 0 ; bit < 8 ; bit++)
             {
-                final boolean spriteBit = (data & mask)!=0;
-                final boolean screenBit;
-                try
-                {
-                    screenBit = readPixel(currentX,currentY);
-                }
-                catch (RuntimeException e)
-                {
-                    throw e;
-                }
+                final boolean spriteBit = (spriteData & spriteReadMask) != 0;
+                final boolean screenBit = (screenData & scrSetMask) != 0;
                 final boolean newValue = spriteBit ^ screenBit;
                 if ( newValue ) {
-                    setPixel( currentX, currentY );
+                    screenData |= scrSetMask;
                 } else {
-                    clearPixel( currentX, currentY );
+                    screenData &= scrClearMask;
                     pixelsCleared |= screenBit;
                 }
+                spriteReadMask >>>= 1;
+                scrSetMask >>>= 1;
+                scrClearMask >>= 1;
+                bitOffset++;
+                if ( bitOffset == 8)
+                {
+                    this.data[scrByteOffset] = (byte) screenData;
+                    scrByteOffset = (scrByteOffset+1) & PIXELARRAY_LENGTH_MASK;
+                    screenData = this.data[scrByteOffset];
+                    bitOffset = 0;
+                    scrSetMask    = 0b1000_0000;
+                    scrClearMask  = ~scrSetMask;
+                }
             }
-            currentY = (currentY+1) % mode.height();
+            this.data[scrByteOffset] = (byte) screenData;
+            rowStartByteOffset = (rowStartByteOffset+ BYTES_PER_ROW) & PIXELARRAY_LENGTH_MASK;
+            scrSetMask = 0b1000_0000 >> scrBitOffset;
+            scrClearMask = ~scrSetMask;
         }
         hasChanged.set(true);
         return pixelsCleared;
     }
 
-    public void dumpScreen()
-    {
-        for ( int y = 0 ; y < mode.height() ; y++ )
-        {
-            for (int x = 0; x < mode.width(); x++)
-            {
-                if ( readPixel( x,y ) ) {
-                    System.out.print("#");
-                } else {
-                    System.out.print(".");
-                }
-            }
-            System.out.println();
-        }
-    }
+    public void copyTo(BufferedImage image) {
 
-    public boolean readPixel(int x,int y) {
-        int byteOffset = getBytesPerRow()*y + (x/8);
-        int bitOffset = x - (x/8)*8;
-        int mask = 0b1000_0000 >>> bitOffset;
-        return (data[ byteOffset ] & mask) != 0;
-    }
-
-    private void setPixel(int x,int y) {
-        int byteOffset = getBytesPerRow()*y + (x/8);
-        int bitOffset = x - (x/8)*8;
-        int mask = 0b1000_0000 >>> bitOffset;
-        data[ byteOffset ] |= mask;
-    }
-
-    private void clearPixel(int x,int y)
-    {
-        int byteOffset = getBytesPerRow()*y + (x/8);
-        int bitOffset = x - (x/8)*8;
-        int mask = 0b1000_0000 >>> bitOffset;
-        data[ byteOffset ] &= ~mask;
+        final byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+        System.arraycopy(this.data,0,pixels,0,this.data.length);
     }
 
     /**
@@ -232,18 +186,6 @@ public class Screen
     public int getGlyphAddr(int glyph)
     {
         return GLYPH_MEM_START+(glyph*5);
-    }
-
-    /**
-     * Get address of sprite for hexadecimal glyph <code>glypth</code> (Super only).
-     * Sprite is 10 bytes high.
-     * @param glyph
-     * @return
-     */
-    public int getGlyphAddrExt(int glyph)
-    {
-        // TODO: Implement me
-        throw new RuntimeException("getGlyphAddrExt() not implemented");
     }
 
     public void setBeep(boolean onOff)

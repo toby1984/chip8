@@ -15,31 +15,25 @@
  */
 package de.codesourcery.chip8.ui;
 
+import de.codesourcery.chip8.emulator.InterpreterDriver;
 import de.codesourcery.chip8.emulator.Keyboard;
 import de.codesourcery.chip8.emulator.Screen;
 
 import javax.swing.JPanel;
-import java.awt.Color;
 import java.awt.Graphics;
-import java.awt.Graphics2D;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 
 public class Panel extends JPanel
 {
-    private final Screen screen;
-
     private final Object IMAGE_LOCK = new Object();
 
     // @GuardedBy( IMAGE_LOCK )
-    private volatile BufferedImage image;
-    // @GuardedBy( IMAGE_LOCK )
-    private volatile Graphics2D graphics;
+    private BufferedImage image;
 
-    public Panel(Screen screen, Keyboard keyboard)
+    public Panel(InterpreterDriver driver)
     {
-        this.screen = screen;
         setFocusable( true );
         requestFocusInWindow();
         final KeyAdapter keyListener = new KeyAdapter()
@@ -50,7 +44,18 @@ public class Panel extends JPanel
                 int key = keyCode( e );
                 if ( key != -1 )
                 {
-                    keyboard.keyPressed( key );
+                    driver.runOnThread(ip -> ip.interpreter.keyboard.keyPressed(key));
+                }
+            }
+
+
+            @Override
+            public void keyReleased(KeyEvent e)
+            {
+                int key = keyCode( e );
+                if ( key != -1 )
+                {
+                    driver.runOnThread(ip -> ip.interpreter.keyboard.keyReleased(key));
                 }
             }
 
@@ -94,56 +99,17 @@ public class Panel extends JPanel
                         return -1;
                 }
             }
-
-            @Override
-            public void keyReleased(KeyEvent e)
-            {
-                int key = keyCode( e );
-                if ( key != -1 )
-                {
-                    keyboard.keyReleased( key );
-                }
-            }
         };
         addKeyListener( keyListener );
-    }
-
-    private Graphics2D createGraphics()
-    {
-        if ( image == null || image.getWidth() != getWidth() || image.getHeight() != getHeight() )
-        {
-            if ( graphics != null ) {
-                graphics.dispose();
-            }
-            image = new BufferedImage( getWidth(), getHeight(), BufferedImage.TYPE_INT_RGB );
-            graphics = image.createGraphics();
-        }
-        return graphics;
     }
 
     public synchronized void draw(Screen screen)
     {
         synchronized (IMAGE_LOCK)
         {
-            final Graphics2D g = createGraphics();
-            g.setColor( Color.BLACK );
-            g.fillRect( 0,0,image.getWidth(),image.getHeight() );
-            g.setColor( Color.WHITE );
-            final int w = screen.getMode().width();
-            final int h = screen.getMode().height();
-            int blockWidth = getWidth() / w;
-            int blockHeight = getHeight() / h;
-
-            for (int y = 0; y < h; y++)
+            if ( image != null )
             {
-                for (int x = 0; x < w; x++)
-                {
-                    if ( screen.readPixel( x, y ) )
-                    {
-                        g.fillRect( x * blockWidth, y * blockHeight,
-                                blockWidth, blockHeight );
-                    }
-                }
+                screen.copyTo(image);
             }
         }
     }
@@ -153,14 +119,10 @@ public class Panel extends JPanel
     {
         synchronized (IMAGE_LOCK)
         {
-            if ( image == null )
-            {
-                super.paintComponent( g );
+            if ( image == null ) {
+                image = new BufferedImage( Screen.WIDTH, Screen.HEIGHT, BufferedImage.TYPE_BYTE_BINARY );
             }
-            else
-            {
-                g.drawImage( image, 0, 0, getWidth(), getHeight(), null );
-            }
+            g.drawImage( image, 0, 0, getWidth(), getHeight(), null );
         }
     }
 }
