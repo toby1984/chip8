@@ -67,7 +67,6 @@ public class InterpreterDriver
         START,STOP,STEP,RESET,RUN,TERMINATE
     }
 
-
     private static final class Cmd
     {
         public final Consumer<ControllerThread> runnable;

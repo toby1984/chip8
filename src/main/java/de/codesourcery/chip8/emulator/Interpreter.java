@@ -466,16 +466,19 @@ public class Interpreter
                     case 0x33:   // 0xfr33	bcd vr 	store the bcd representation of register vr at
                         // // location I,I+1,I+2
                         // Doesn't change I
-                        String value = Integer.toString(register[r0]);
-                        value = StringUtils.leftPad(value, 3, '0');
+                        int value = register[r0];
+                        
+                        int v0 = value/100;
+                        value -= v0*100;
+                        int v1 = value/10;
+                        value -= v1*10;
 
                         int ptr = index;
-                        if (TRACE) trace("Writing '" + value + "' @ 0x" + Integer.toHexString(ptr));
-                        memory.write(ptr, value.charAt(0));
+                        memory.write(ptr, v0);
                         ptr = (ptr + 1) & 0xfff;
-                        memory.write(ptr, value.charAt(1));
+                        memory.write(ptr, v1);
                         ptr = (ptr + 1) & 0xfff;
-                        memory.write(ptr, value.charAt(2));
+                        memory.write(ptr, value);
                         break;
                     case 0x55:   // 0xfr55	str v0-vr 	store registers v0-vr at location I onwards
                         // I is incremented to point to the next location on. e.g. I = I + r + 1
