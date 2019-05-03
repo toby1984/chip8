@@ -26,7 +26,7 @@ public class InterpreterDriver
 {
     private static boolean INVOKE_TICK_LISTENERS_WHILE_RUNNING = false;
 
-    public static final int MAX_DELAY = 600000;
+    public static final int MAX_DELAY = 1000000;
 
     private static final int TICK_INTERVAL = 10000;
 
