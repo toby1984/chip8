@@ -26,7 +26,7 @@ import java.util.function.Consumer;
 public class InterpreterDriver
 {
     private static final float INSTRUCTIONS_PER_SECOND = 1500;
-    public static final int MAX_DELAY = 300000;
+    public static final int MAX_DELAY = 600000;
 
     public enum Reason {
         STOPPED,
@@ -90,9 +90,7 @@ public class InterpreterDriver
         private long lastTimestamp;
         private long cycleCount=0;
         private long delay=1000;
-//        private final PIDController pid = new PIDController( INSTRUCTIONS_PER_SECOND,0.04f,700f,0 );
-        private final PIDController pid = new PIDController( INSTRUCTIONS_PER_SECOND,0.02f,500f,-0.0000001f);
-        private int tickInterval = MAX_DELAY;
+        private int tickInterval = 10000;
         private volatile boolean terminated;
 
         public double dummyValue = 123;
@@ -104,7 +102,6 @@ public class InterpreterDriver
                 // start
                 cycleCount = 0;
                 lastTimestamp = System.nanoTime();
-                pid.setTarget( INSTRUCTIONS_PER_SECOND );
                 invokeStateListeners( reason );
             }
             else if ( oldState && ! newState )
@@ -209,18 +206,6 @@ public class InterpreterDriver
                 if ( (++cycleCount % tickInterval) == 0 )
                 {
                     invokeTickListeners();
-
-                    long now = System.nanoTime();
-                    final long elapsedNanos = now - lastTimestamp;
-                    final float cyclesPerSecond = cycleCount / (elapsedNanos / (float) TimeUnit.SECONDS.toNanos( 1 ));
-                    float pidValue = pid.update( now,cyclesPerSecond );
-                    if ( pidValue != 0.0f )
-                    {
-                        delay = (long) Math.min( Math.max( 0, -pidValue ), MAX_DELAY );
-                        System.out.println( "Delay: " + delay + " , elapsed: " + elapsedNanos + " ms, cycles: " + cycleCount + ", cycles per second: " + cyclesPerSecond );
-                    }
-                    lastTimestamp = now;
-                    cycleCount = 0;
                 }
                 if ( cmd != null && cmd.type == CmdType.STEP )
                 {
@@ -250,7 +235,6 @@ public class InterpreterDriver
 
         private void invokeTickListeners()
         {
-            System.out.println("--- tick @ "+Integer.toHexString(interpreter.pc )+"---");
             tickListeners.forEach( l ->
             {
                 try
@@ -301,10 +285,11 @@ public class InterpreterDriver
     public void setSpeed(float value)
     {
         float factor = Math.max(0, Math.min(1,value) );
-        System.out.println("Setting speed to "+(100.0f*factor)+" %");
+        final long newDelay = (long) ((1.0f-factor)*MAX_DELAY);
+        System.out.println("Setting speed to "+(100.0f*factor)+" % (delay: "+newDelay+")");
         thread.submit( new Cmd( CmdType.RUN, thread ->
         {
-            thread.delay = (long) ((1.0f-factor)*MAX_DELAY);
+            thread.delay = newDelay;
         }));
     }
 

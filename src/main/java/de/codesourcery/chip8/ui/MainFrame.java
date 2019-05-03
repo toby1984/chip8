@@ -44,11 +44,14 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
@@ -291,6 +294,7 @@ public class MainFrame extends JFrame
             private final JButton stepButton=new JButton("Step");
             private final JButton stopButton=new JButton("Stop");
             private final JButton loadButton=new JButton("Load");
+            private final JSlider speed = new JSlider(0,1000,500);
 
             {
                 getContentPane().setLayout( new FlowLayout() );
@@ -299,8 +303,20 @@ public class MainFrame extends JFrame
                 getContentPane().add( stopButton );
                 getContentPane().add( resetButton );
                 getContentPane().add( loadButton );
+                getContentPane().add( speed );
 
                 stopButton.setEnabled( false );
+                speed.addChangeListener( new ChangeListener() {
+                    @Override
+                    public void stateChanged(ChangeEvent e)
+                    {
+                        if ( ! speed.getValueIsAdjusting() )
+                        {
+                            final float factor = speed.getValue()/1000f;
+                            driver.setSpeed( factor );
+                        }
+                    }
+                } );
                 startButton.addActionListener( ev -> driver.start() );
                 stopButton.addActionListener( ev -> driver.stop() );
                 stepButton.addActionListener( ev -> driver.step() );
