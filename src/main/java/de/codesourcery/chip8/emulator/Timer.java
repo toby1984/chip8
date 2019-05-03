@@ -22,9 +22,6 @@ public abstract class Timer implements Runnable
     private final Object LOCK = new Object();
 
     // @GuardedBy( LOCK )
-    private boolean active;
-
-    // @GuardedBy( LOCK )
     private int value;
 
     public Timer(String name)
@@ -43,12 +40,11 @@ public abstract class Timer implements Runnable
         boolean triggered = false;
         synchronized (LOCK)
         {
-            if ( active && value > 0 )
+            if ( value > 0 )
             {
                 value--;
                 if ( value == 0 )
                 {
-                    active = false;
                     triggered = true;
                 }
             }
@@ -61,7 +57,6 @@ public abstract class Timer implements Runnable
     public void reset() {
         synchronized (LOCK)
         {
-            active = false;
             value = 0;
         }
     }
@@ -71,7 +66,6 @@ public abstract class Timer implements Runnable
         synchronized (LOCK)
         {
             this.value = value;
-            this.active = value > 0;
         }
     }
 

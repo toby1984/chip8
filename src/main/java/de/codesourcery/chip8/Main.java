@@ -63,7 +63,14 @@ public class Main
     private static InterpreterDriver driver;
     private static final Memory memory = new Memory( 4096);
     private static final Screen screen = new Screen( memory );
-    private static final Keyboard keyboard = new Keyboard();
+    private static final Keyboard keyboard = new Keyboard() {
+
+        @Override
+        protected InterpreterDriver getDriver()
+        {
+            return driver;
+        }
+    };
 
     public static void main(String[] args) throws InvocationTargetException, InterruptedException
     {
@@ -143,7 +150,7 @@ public class Main
             }
         };
 
-        final Interpreter ip = new Interpreter( memory,screen,keyboard, soundTimer, delayTimer, hook);
+        final Interpreter ip = new Interpreter( memory,screen, keyboard, soundTimer, delayTimer, hook);
         driver = new InterpreterDriver(ip);
 
         driver.setSpeed( 0.5f );

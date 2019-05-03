@@ -35,6 +35,10 @@ public class Interpreter
     private static final boolean CAPTURE_BACKTRACE = false;
     private static final int BACKTRACE_SIZE = 16;
 
+    private static final int FLAG_WAIT_DELAY = 1;
+    private static final int FLAG_WAIT_KEY_PRESS = 2;
+    private static final int FLAG_WAIT_KEY_RELEASE = 4;
+
     public final Memory memory;
     public final Screen screen;
     public final Keyboard keyboard;
@@ -52,15 +56,11 @@ public class Interpreter
     private int backtraceReadPtr = 0;
     private int backtraceWritePtr = 0;
 
-    // keyboard handling
-    private enum KeyboardWaitState {
-        WAIT_PRESS,WAIT_RELEASE,NONE
-    }
-    private KeyboardWaitState keyboardWaitState = KeyboardWaitState.NONE;
-    private int pressedKey;
+    private int waitFlags;
 
+    // keyboard handling
+    private int pressedKey;
     private int keyDestReg;
-    private boolean waitForDelay;
 
     private static final int RAND_SEED = 0xdeadbeef;
 
@@ -88,8 +88,9 @@ public class Interpreter
         screen.setBeep(false);
     }
 
-    public void delayTimerTriggered() {
-        waitForDelay = false;
+    public void delayTimerTriggered()
+    {
+        waitFlags &= ~FLAG_WAIT_DELAY;
     }
 
     public void reset()
@@ -104,9 +105,7 @@ public class Interpreter
         screen.reset();
         keyboard.reset();
 
-        keyboardWaitState = KeyboardWaitState.NONE;
         keyDestReg = 0;
-        waitForDelay = false;
 
         Arrays.fill(stack,0);
         Arrays.fill(register,0);
@@ -114,6 +113,7 @@ public class Interpreter
         pc = 0x200;
         sp = 0;
         index = 0;
+        waitFlags = 0;
 
         resetHook.accept( this );
     }
@@ -143,40 +143,37 @@ public class Interpreter
 
     public void tick()
     {
-        if ( waitForDelay ) {
-            trace("Waiting for delay");
-            return;
-        }
-        if ( keyboardWaitState == KeyboardWaitState.WAIT_PRESS )
+        if ( waitFlags == 0 )
         {
-            final int pressed = keyboard.readKey();
-            if ( pressed == Keyboard.NO_KEY )
-            {
-                traceKeyboard("Waiting for keypress");
-                return;
+            if ( CAPTURE_BACKTRACE ) {
+                backtrace[ backtraceWritePtr ] = pc;
+                backtraceWritePtr++;
+                if ( backtraceWritePtr == BACKTRACE_SIZE ) {
+                    backtraceWritePtr = 0;
+                    backtraceReadPtr = (backtraceReadPtr+1) % BACKTRACE_SIZE;
+                }
             }
-            pressedKey = pressed;
-            keyboardWaitState = KeyboardWaitState.WAIT_RELEASE;
-            traceKeyboard("PRESSED: Key "+pressed);
-        } else if ( keyboardWaitState == KeyboardWaitState.WAIT_RELEASE) {
 
-            if ( keyboard.isKeyPressed(pressedKey) ) {
-                traceKeyboard("Waiting for key release");
-                return;
-            }
-            keyboardWaitState = KeyboardWaitState.NONE;
-            register[ keyDestReg ] = pressedKey;
-            traceKeyboard("RELEASED: Key "+pressedKey);
+            executeInstruction();
         }
-        if ( CAPTURE_BACKTRACE ) {
-            backtrace[ backtraceWritePtr ] = pc;
-            backtraceWritePtr++;
-            if ( backtraceWritePtr == BACKTRACE_SIZE ) {
-                backtraceWritePtr = 0;
-                backtraceReadPtr = (backtraceReadPtr+1) % BACKTRACE_SIZE;
-            }
+    }
+
+    public void keyPressed(int key) {
+        if ( ( waitFlags & FLAG_WAIT_KEY_PRESS) != 0 )
+        {
+            pressedKey = key;
+            waitFlags &= ~FLAG_WAIT_KEY_PRESS;
+            waitFlags |= FLAG_WAIT_KEY_RELEASE;
         }
-        executeInstruction();
+    }
+
+    public void keyReleased(int key)
+    {
+        if ( ( waitFlags & FLAG_WAIT_KEY_RELEASE) != 0 && key == pressedKey )
+        {
+            register[ keyDestReg ] = key;
+            waitFlags &= ~FLAG_WAIT_KEY_RELEASE;
+        }
     }
 
     private void executeInstruction()
@@ -416,13 +413,15 @@ public class Interpreter
                     break;
                 case 0x0a:   // 0xfr0a	key vr wait for keypress,put key in register vr
                     if ( TRACE_KEYBOARD ) traceKeyboard("Waiting for keypress");
-                    keyboardWaitState = KeyboardWaitState.WAIT_PRESS;
                     keyDestReg = r0;
+                    waitFlags |= FLAG_WAIT_KEY_PRESS;
                     break;
                 case 0x15:   // 0xfr15	sdelay vr 	set the delay timer to vr
-                    delayTimer.setValue( register[r0] );
                     if ( TRACE ) trace("delay-timer = "+Integer.toHexString( register[r0] ) );
-                    waitForDelay = register[r0] > 0;
+                    if ( register[r0] > 0 ) {
+                        waitFlags |= FLAG_WAIT_DELAY;
+                    }
+                    delayTimer.setValue( register[r0] );
                     break;
                 case 0x18:   // 0xfr18	ssound vr 	set the sound timer to vr
                     soundTimer.setValue( register[r0] );

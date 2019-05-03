@@ -18,35 +18,28 @@ package de.codesourcery.chip8.emulator;
 import java.util.HashSet;
 import java.util.Set;
 
-public class Keyboard
+public abstract class Keyboard
 {
-    public static final int NO_KEY = -1;
-
     private final Set<Integer> pressedKeys = new HashSet<>();
 
     public void keyPressed(int key) {
         System.out.println("Pressed: "+key);
         pressedKeys.add( Integer.valueOf( key ) );
+        getDriver().runOnThread(driver -> driver.interpreter.keyPressed(key) );
     }
+
+    protected abstract InterpreterDriver getDriver();
 
     public void keyReleased(int key)
     {
         System.out.println("Released: "+key);
         pressedKeys.remove( Integer.valueOf( key ) );
+        getDriver().runOnThread(driver -> driver.interpreter.keyReleased(key) );
     }
 
     public boolean isKeyPressed(int key)
     {
         return pressedKeys.contains( Integer.valueOf( key ) );
-    }
-
-    public int readKey()
-    {
-        if ( pressedKeys.isEmpty() )
-        {
-            return NO_KEY;
-        }
-        return pressedKeys.iterator().next();
     }
 
     public void reset()
