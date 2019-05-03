@@ -20,9 +20,14 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 public class InterpreterDriver
 {
+    private static final float INSTRUCTIONS_PER_SECOND = 1500;
+    public static final int MAX_DELAY = 300000;
+
     public enum Reason {
         STOPPED,
         STARTED,
@@ -60,18 +65,19 @@ public class InterpreterDriver
         START,STOP,STEP,RESET,RUN,TERMINATE
     }
 
+
     private static final class Cmd
     {
-        public final Runnable runnable;
+        public final Consumer<ControllerThread> runnable;
         public final CmdType type;
 
-        private Cmd(CmdType type,Runnable runnable) {
+        private Cmd(CmdType type,Consumer<ControllerThread> runnable) {
             this.type = type;
             this.runnable = runnable;
         }
 
-        public void onReceive() {
-            runnable.run();
+        public void onReceive(ControllerThread thread) {
+            runnable.accept(thread);
         }
     }
 
@@ -81,12 +87,33 @@ public class InterpreterDriver
                 new ArrayBlockingQueue<>(50,true);
 
         private boolean running;
+        private long lastTimestamp;
         private long cycleCount=0;
         private long delay=1000;
-        private int tickInterval = 10000;
+//        private final PIDController pid = new PIDController( INSTRUCTIONS_PER_SECOND,0.04f,700f,0 );
+        private final PIDController pid = new PIDController( INSTRUCTIONS_PER_SECOND,0.02f,500f,-0.0000001f);
+        private int tickInterval = MAX_DELAY;
         private volatile boolean terminated;
 
         public double dummyValue = 123;
+
+        private void setRunning(boolean newState, Reason reason)
+        {
+            final boolean oldState = running;
+            if ( ! oldState && newState) {
+                // start
+                cycleCount = 0;
+                lastTimestamp = System.nanoTime();
+                pid.setTarget( INSTRUCTIONS_PER_SECOND );
+                invokeStateListeners( reason );
+            }
+            else if ( oldState && ! newState )
+            {
+                invokeTickListeners();
+                invokeStateListeners( reason );
+            }
+            this.running = newState;
+        }
 
         public void submit(Cmd cmd)
         {
@@ -100,7 +127,7 @@ public class InterpreterDriver
         {
             double v = dummyValue;
             for ( long i = delay ; i > 0 ; i--) {
-                v = v + Math.sqrt(v);
+                v = v + v*1.35*i + v / 3.74;
             }
             dummyValue = v;
         }
@@ -117,73 +144,58 @@ public class InterpreterDriver
 
         private void doRun()
         {
-            final Breakpoint[] buffer = new Breakpoint[2]; // at most one temp. + one non-temp breakpoint per address
             boolean ignoreBreakpoint = false;
             while( true)
             {
                 Cmd cmd;
-                if ( running )
+                try
                 {
-                    cmd = cmdQueue.poll();
+                    cmd = running ? cmdQueue.poll() : cmdQueue.take();
                 }
-                else
+                catch (InterruptedException e)
                 {
-                    try
-                    {
-                        cmd = cmdQueue.take();
-                    }
-                    catch (InterruptedException e)
-                    {
-                        continue;
-                    }
+                    continue;
                 }
                 if ( cmd != null )
                 {
-                    cmd.onReceive();
+                    cmd.onReceive(this);
                     switch(cmd.type)
                     {
                         case TERMINATE:
                             terminated = true;
+                            setRunning( false , Reason.STOPPED);
                             while( ( cmd = cmdQueue.poll() ) != null ) {
-                                cmd.onReceive();
+                                cmd.onReceive(this);
                             }
                             return;
                         case RUN:
                             continue;
                         case RESET:
-                            running = false;
+                            setRunning( false , Reason.STOPPED);
                             interpreter.reset();
-                            invokeTickListeners();
-                            invokeStateListeners( Reason.STOPPED);
                             continue;
                         case START:
                             ignoreBreakpoint = ! running;
-                            running = true;
-                            invokeStateListeners( Reason.STARTED);
+                            setRunning( true, Reason.STARTED );
                             continue;
                         case STOP:
-                            running = false;
-                            invokeStateListeners( Reason.STOPPED);
+                            setRunning( false, Reason.STOPPED );
                             continue;
                         case STEP:
                             ignoreBreakpoint = ! running;
-                            invokeStateListeners( Reason.STARTED);
+                            setRunning( true, Reason.STARTED);
                             break;
                     }
                 }
 
                 if ( ! ignoreBreakpoint && enabledBreakpoints.checkBreakpointHit(interpreter.pc ) )
                 {
-                    running = false;
-                    invokeStateListeners( Reason.STOPPED_BREAKPOINT );
-                    invokeTickListeners();
+                    setRunning( false , Reason.STOPPED_BREAKPOINT);
                     continue;
                 }
 
                 ignoreBreakpoint = false;
 
-                boolean stateListenersInvoked = false;
-                boolean tickListenersInvoked = false;
                 try
                 {
                     interpreter.tick();
@@ -191,25 +203,29 @@ public class InterpreterDriver
                 catch(Exception e)
                 {
                     e.printStackTrace();
-                    running = false;
-                    stateListenersInvoked = true;
-                    invokeStateListeners( Reason.STOPPED );
+                    setRunning( false, Reason.STOPPED );
+                    continue;
                 }
-                if ( (cycleCount++ % tickInterval) == 0 )
+                if ( (++cycleCount % tickInterval) == 0 )
                 {
                     invokeTickListeners();
-                    tickListenersInvoked=true;
+
+                    long now = System.nanoTime();
+                    final long elapsedNanos = now - lastTimestamp;
+                    final float cyclesPerSecond = cycleCount / (elapsedNanos / (float) TimeUnit.SECONDS.toNanos( 1 ));
+                    float pidValue = pid.update( now,cyclesPerSecond );
+                    if ( pidValue != 0.0f )
+                    {
+                        delay = (long) Math.min( Math.max( 0, -pidValue ), MAX_DELAY );
+                        System.out.println( "Delay: " + delay + " , elapsed: " + elapsedNanos + " ms, cycles: " + cycleCount + ", cycles per second: " + cyclesPerSecond );
+                    }
+                    lastTimestamp = now;
+                    cycleCount = 0;
                 }
                 if ( cmd != null && cmd.type == CmdType.STEP )
                 {
-                    running = false;
-                    if ( ! tickListenersInvoked ) {
-                        invokeTickListeners();
-                    }
-                    if (! stateListenersInvoked )
-                    {
-                        invokeStateListeners( Reason.STOPPED);
-                    }
+                    System.out.println("Step");
+                    setRunning( false, Reason.STOPPED );
                 } else {
                     delay();
                 }
@@ -234,6 +250,7 @@ public class InterpreterDriver
 
         private void invokeTickListeners()
         {
+            System.out.println("--- tick @ "+Integer.toHexString(interpreter.pc )+"---");
             tickListeners.forEach( l ->
             {
                 try
@@ -281,6 +298,16 @@ public class InterpreterDriver
         execute(CmdType.STEP);
     }
 
+    public void setSpeed(float value)
+    {
+        float factor = Math.max(0, Math.min(1,value) );
+        System.out.println("Setting speed to "+(100.0f*factor)+" %");
+        thread.submit( new Cmd( CmdType.RUN, thread ->
+        {
+            thread.delay = (long) ((1.0f-factor)*MAX_DELAY);
+        }));
+    }
+
     public void runOnThread(IDriverCallback callback)
     {
         if ( Thread.currentThread() == thread ) {
@@ -289,7 +316,7 @@ public class InterpreterDriver
         else
         {
             final CountDownLatch latch = new CountDownLatch(1);
-            thread.submit( new Cmd( CmdType.RUN, () ->
+            thread.submit( new Cmd( CmdType.RUN, thread ->
             {
                 try
                 {
@@ -311,7 +338,7 @@ public class InterpreterDriver
     private void execute(CmdType type)
     {
         final CountDownLatch latch = new CountDownLatch(1);
-        thread.submit( new Cmd(type, latch::countDown) );
+        thread.submit( new Cmd(type, thread -> latch.countDown() ) );
         try
         {
             latch.await();

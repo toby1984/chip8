@@ -30,7 +30,7 @@ public class Interpreter
 {
     private static final boolean DEBUG = false;
     private static final boolean TRACE = false;
-    private static final boolean TRACE_KEYBOARD = true;
+    private static final boolean TRACE_KEYBOARD = false;
 
     private static final boolean CAPTURE_BACKTRACE = true;
     private static final int BACKTRACE_SIZE = 16;
@@ -385,15 +385,12 @@ public class Interpreter
             int x = register[ cmd & 0x0f ];
             int y = register[ (data & 0xf0)>>>4 ];
             int height = (data & 0x0f);
-            if ( height != 0x00 )
-            {
-                if ( TRACE ) trace("drawSprite @ 0x"+Integer.toHexString( index )+": x="+x+",y="+y+",h="+height);
-                register[0x0f] = screen.drawSprite(x,y,height,index) ? 1 : 0;
-            }
+            if ( TRACE ) trace("drawSprite @ 0x"+Integer.toHexString( index )+": x="+x+",y="+y+",h="+height);
+            register[0x0f] = screen.drawSprite(x,y,height,index) ? 1 : 0;
         }
         else if ( (cmd & 0xf0) == 0xe0 )
         {
-            int key = cmd & 0x0f;
+            int key = register[ cmd & 0x0f ];
             if ( data == 0x9e )
             {
                 // 0xek9e 	skpr k 	skip if key (register rk) pressed
