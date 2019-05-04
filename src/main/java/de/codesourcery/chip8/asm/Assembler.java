@@ -27,25 +27,26 @@ import org.apache.commons.lang3.Validate;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.nio.file.Files;
 
+/**
+ * Crude CHIP-8 assembler.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class Assembler
 {
-    private static final int UNKNOWN_SIZE = -1;
-
     private CompilationContext compilationContext;
 
     public static final class CompilationContext
     {
         public final SymbolTable symbolTable = new SymbolTable();
-        public final OutputStream executable;
-        public int currentAddress;
+        final OutputStream executable;
+        int currentAddress;
 
-        public CompilationContext(OutputStream executable)
+        CompilationContext(OutputStream executable)
         {
             this.executable = executable;
         }
@@ -69,12 +70,7 @@ public class Assembler
         }
     }
 
-    enum Phase
-    {
-        CALCULATE_ADDRESSES
-    }
-
-    public byte[] assemble(ASTNode ast,int startAddress)
+    private byte[] assemble(ASTNode ast, int startAddress)
     {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
         compilationContext = new CompilationContext( bos );
@@ -85,7 +81,7 @@ public class Assembler
         {
             if ( node instanceof LabelNode )
             {
-                compilationContext.symbolTable.add( ((LabelNode) node).id , compilationContext.currentAddress );
+                compilationContext.symbolTable.define( ((LabelNode) node).id , compilationContext.currentAddress );
             }
             else if ( node instanceof InstructionNode )
             {
@@ -108,20 +104,6 @@ public class Assembler
 
     public static void main(String[] args) throws IOException
     {
-        if ( args.length > 0 )
-        {
-            assemble(args);
-        }
-        else
-        {
-            final File base = new File( "/home/tobi/intellij_workspace/chip8" );
-            assemble( new File( base, "sample_sources/test.chip8" ),
-                    new File( base, "src/main/resources/test.ch8" ) );
-        }
-    }
-
-    public static void assemble(String[] args) throws IOException
-    {
         if ( args.length != 2 )
         {
             throw new RuntimeException( "Usage: <source file> <binary>" );
@@ -135,6 +117,14 @@ public class Assembler
         assemble(src,out);
     }
 
+    /**
+     * Compile source from/to a file.
+     *
+     * @param src source to compile
+     * @param out output stream to write binary to
+     * @return number of bytes written to the output stream
+     * @throws IOException
+     */
     public static int assemble(File src, File out) throws IOException
     {
         if (!src.exists())
@@ -146,6 +136,14 @@ public class Assembler
         return assemble( srcCode, new FileOutputStream(out) );
     }
 
+    /**
+     * Compile source from a string and write it to an {@link OutputStream}.
+     *
+     * @param srcCode source to compile
+     * @param out output stream to write binary to
+     * @return number of bytes written to the output stream
+     * @throws IOException
+     */
     public static int assemble(String srcCode, OutputStream out) throws IOException
     {
         Validate.notNull(srcCode, "srcCode must not be null");

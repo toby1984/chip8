@@ -27,15 +27,14 @@ import de.codesourcery.chip8.asm.parser.Lexer;
 import de.codesourcery.chip8.asm.parser.Parser;
 import de.codesourcery.chip8.asm.parser.Scanner;
 import de.codesourcery.chip8.emulator.Breakpoint;
-import de.codesourcery.chip8.emulator.Interpreter;
-import de.codesourcery.chip8.emulator.InterpreterDriver;
+import de.codesourcery.chip8.emulator.Emulator;
+import de.codesourcery.chip8.emulator.EmulatorDriver;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JDesktopPane;
-import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JInternalFrame;
@@ -55,8 +54,6 @@ import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.text.AttributeSet;
-import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
@@ -92,11 +89,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+/**
+ * The application's UI.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class MainFrame extends JFrame
 {
     public enum ConfigKey
@@ -145,12 +146,12 @@ public class MainFrame extends JFrame
     }
 
     private final List<MyFrame> windows;
-    private final InterpreterDriver driver;
+    private final EmulatorDriver driver;
 
     private final IConfigurationProvider configProvider;
     private final Properties config;
 
-    public MainFrame(InterpreterDriver driver, IConfigurationProvider configProvider)
+    public MainFrame(EmulatorDriver driver, IConfigurationProvider configProvider)
     {
         Validate.notNull( driver, "controller must not be null" );
         Validate.notNull(configProvider, "configProvider must not be null");
@@ -175,7 +176,7 @@ public class MainFrame extends JFrame
         addWindowListener(new WindowAdapter() {@Override public void windowClosing(WindowEvent e) { quit(); } } );
     }
 
-    protected abstract class MyFrame extends JInternalFrame implements InterpreterDriver.IDriverCallback, InterpreterDriver.IStateListener
+    protected abstract class MyFrame extends JInternalFrame implements EmulatorDriver.IDriverCallback, EmulatorDriver.IStateListener
     {
         public final ConfigKey configKey;
 
@@ -214,10 +215,10 @@ public class MainFrame extends JFrame
         }
 
         @Override
-        public void invoke(InterpreterDriver controller) { }
+        public void invoke(EmulatorDriver controller) { }
 
         @Override
-        public void stateChanged(InterpreterDriver controller, InterpreterDriver.Reason reason) { }
+        public void stateChanged(EmulatorDriver controller, EmulatorDriver.Reason reason) { }
     }
 
     private List<MyFrame> createFrames()
@@ -245,10 +246,10 @@ public class MainFrame extends JFrame
             }
 
             @Override
-            public void invoke(InterpreterDriver controller)
+            public void invoke(EmulatorDriver controller)
             {
-                final int pc = controller.interpreter.pc;
-                final String text = controller.interpreter.memory.dump(pc,128,16);
+                final int pc = controller.emulator.pc;
+                final String text = controller.emulator.memory.dump(pc,128,16);
                 SwingUtilities.invokeLater(() -> dump.setText(text) );
             }
         };
@@ -259,19 +260,22 @@ public class MainFrame extends JFrame
         return new MyFrame("Screen", ConfigKey.SCREEN, false,false ) {
 
             {
-                final Panel p = new Panel( driver );
+                final ScreenPanel p = new ScreenPanel( driver );
                 getContentPane().add( p );
                 final AtomicBoolean screenChanged = new AtomicBoolean();
                 swingTimer = new Timer(16, ev ->
                 {
                     driver.runOnThread(driver ->
                     {
-                        final boolean updateScreen = driver.interpreter.screen.hasChanged();
-                        if (updateScreen)
+                        if (driver.emulator.screen.hasChanged())
                         {
-                            p.draw(driver.interpreter.screen);
+                            p.draw(driver.emulator.screen);
+                            screenChanged.set(true);
                         }
-                        screenChanged.set(updateScreen);
+                        else
+                        {
+                            screenChanged.set(false);
+                        }
                     });
                     if ( screenChanged.get() )
                     {
@@ -291,6 +295,7 @@ public class MainFrame extends JFrame
             private final JButton startButton=new JButton("Start");
             private final JButton resetButton=new JButton("Reset");
             private final JButton stepButton=new JButton("Step");
+            private final JButton stepOverButton=new JButton("Step over");
             private final JButton stopButton=new JButton("Stop");
             private final JButton loadButton=new JButton("Load");
             private final JSlider speed = new JSlider(0,1000,500);
@@ -299,6 +304,7 @@ public class MainFrame extends JFrame
                 getContentPane().setLayout( new FlowLayout() );
                 getContentPane().add( startButton );
                 getContentPane().add( stepButton );
+                getContentPane().add( stepOverButton );
                 getContentPane().add( stopButton );
                 getContentPane().add( resetButton );
                 getContentPane().add( loadButton );
@@ -319,6 +325,7 @@ public class MainFrame extends JFrame
                 startButton.addActionListener( ev -> driver.start() );
                 stopButton.addActionListener( ev -> driver.stop() );
                 stepButton.addActionListener( ev -> driver.step() );
+                stepOverButton.addActionListener( ev -> driver.stepOver() );
                 resetButton.addActionListener( ev -> driver.reset() );
                 loadButton.addActionListener( ev ->
                 {
@@ -333,7 +340,7 @@ public class MainFrame extends JFrame
                         configProvider.save();
 
                         driver.runOnThread(driver -> {
-                            driver.interpreter.setResetHook( interpreter ->
+                            driver.emulator.setResetHook(interpreter ->
                             {
                                 try
                                 {
@@ -355,11 +362,11 @@ public class MainFrame extends JFrame
             }
 
             @Override
-            public void stateChanged(InterpreterDriver controller, InterpreterDriver.Reason reason)
+            public void stateChanged(EmulatorDriver controller, EmulatorDriver.Reason reason)
             {
                 SwingUtilities.invokeLater(  () ->
                 {
-                    final boolean isRunning = reason == InterpreterDriver.Reason.STARTED;
+                    final boolean isRunning = reason == EmulatorDriver.Reason.STARTED;
                     startButton.setEnabled( !isRunning );
                     stopButton.setEnabled( isRunning );
                     stepButton.setEnabled( !isRunning );
@@ -382,25 +389,32 @@ public class MainFrame extends JFrame
             }
 
             @Override
-            public void invoke(InterpreterDriver controller)
+            public void invoke(EmulatorDriver controller)
             {
-                final Interpreter interpreter = controller.interpreter;
+                final Emulator interpreter = controller.emulator;
                 buffer.setLength(0);
-                for ( int i = 0,len=16,inThisRow=0 ; i < len ; i++,inThisRow++ )
-                {
-                    String regNum = StringUtils.leftPad(Integer.toString(i),2,' ');
-                    String reg = "Register "+regNum+": "+hexByte( interpreter.register[i] );
-                    buffer.append(reg);
-                    if ( ( inThisRow % 4 ) == 0 && inThisRow > 0 ) {
-                        buffer.append("\n");
-                    } else {
-                        buffer.append("  ");
-                    }
-                }
-                buffer.append("\n\n");
                 buffer.append("PC: ").append( hexWord( interpreter.pc ) );
                 buffer.append("    Index: ").append( hexWord( interpreter.index ) );
                 buffer.append("    SP: ").append( hexByte( interpreter.sp) );
+                buffer.append("\n\n");
+
+                for ( int reg = 0 ; reg < 4 ; reg++)
+                {
+                    int num = reg;
+                    for (int i = 4 ; i > 0 ; i--, num+=4 )
+                    {
+                        String regNum = StringUtils.leftPad(Integer.toString(num), 2, ' ');
+                        String sReg = "Register " + regNum + ": " + hexByte(interpreter.register[num]);
+                        buffer.append(sReg);
+                        if (i>1)
+                        {
+                            buffer.append("  ");
+                        }
+                    }
+                    buffer.append("\n");
+                }
+
+
                 final String s = buffer.toString();
                 SwingUtilities.invokeLater( () -> area.setText( s ) );
             }
@@ -498,11 +512,11 @@ public class MainFrame extends JFrame
             }
 
             @Override
-            public void invoke(InterpreterDriver controller)
+            public void invoke(EmulatorDriver controller)
             {
                 synchronized(this.lines)
                 {
-                    final Interpreter interpreter = controller.interpreter;
+                    final Emulator interpreter = controller.emulator;
                     this.currentPC = interpreter.pc;
 
                     final int displayStart;
@@ -810,13 +824,13 @@ public class MainFrame extends JFrame
                     final int bytesWritten = Assembler.assemble(source.getText(), out);
                     msg("Compilation succeeded ("+bytesWritten+" bytes)");
                     driver.runOnThread(cb -> {
-                        final Consumer<Interpreter> hook = ip ->
+                        final Consumer<Emulator> hook = ip ->
                         {
                             final byte[] data = out.toByteArray();
                             System.out.println("Loading compiled code ("+data.length+" bytes)");
                             ip.memory.write(0x200, data);
                         };
-                        cb.interpreter.setResetHook(hook);
+                        cb.emulator.setResetHook(hook);
                     });
                     driver.reset();
                 }
@@ -927,7 +941,7 @@ public class MainFrame extends JFrame
         {
             swingTimer.stop();
         }
-        driver.terminate();
+        driver.destroy();
         windows.forEach(win -> Configuration.saveWindowState(config, win.configKey,win) );
         Configuration.saveWindowState(config, ConfigKey.MAINFRAME, MainFrame.this);
         configProvider.save();

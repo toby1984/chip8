@@ -17,6 +17,11 @@ package de.codesourcery.chip8.asm.ast;
 
 import de.codesourcery.chip8.asm.Identifier;
 
+/**
+ * Label AST node.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class LabelNode extends ASTNode
 {
     public Identifier id;

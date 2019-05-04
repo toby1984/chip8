@@ -15,6 +15,13 @@
  */
 package de.codesourcery.chip8.asm.parser;
 
+/**
+ * Source code scanner.
+ *
+ * Iterates over the input source code one character at a time.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public final class Scanner
 {
     private final String input;

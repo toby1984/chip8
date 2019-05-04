@@ -17,6 +17,11 @@ package de.codesourcery.chip8.asm.ast;
 
 import de.codesourcery.chip8.asm.parser.Parser;
 
+/**
+ * Instruction AST node.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class InstructionNode extends ASTNode
 {
     public final String mnemonic;

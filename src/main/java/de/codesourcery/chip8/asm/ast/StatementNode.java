@@ -15,6 +15,11 @@
  */
 package de.codesourcery.chip8.asm.ast;
 
+/**
+ * Statement AST node.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class StatementNode extends ASTNode
 {
     public StatementNode() {

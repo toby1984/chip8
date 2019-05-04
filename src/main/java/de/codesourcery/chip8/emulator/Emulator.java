@@ -16,7 +16,6 @@
 package de.codesourcery.chip8.emulator;
 
 import de.codesourcery.chip8.Disassembler;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 
 import java.util.ArrayList;
@@ -26,7 +25,19 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
 
-public class Interpreter
+/**
+ * The actual CHIP-8 emulator.
+ *
+ * The whole emulation subsystem is <b>not</b> thread-safe, care must be taken to only
+ * change/inspect emulation state through the {@link EmulatorDriver#runOnThread(EmulatorDriver.IDriverCallback)}
+ * method.
+ *
+ * This class is invoked by {@link EmulatorDriver} to execute the emulation.
+ * #
+ * @author tobias.gierke@code-sourcery.de
+ * @see EmulatorDriver
+ */
+public class Emulator
 {
     private static final boolean DEBUG = false;
     private static final boolean TRACE = false;
@@ -34,10 +45,6 @@ public class Interpreter
 
     private static final boolean CAPTURE_BACKTRACE = false;
     private static final int BACKTRACE_SIZE = 16;
-
-    private static final int FLAG_WAIT_DELAY = 1;
-    private static final int FLAG_WAIT_KEY_PRESS = 2;
-    private static final int FLAG_WAIT_KEY_RELEASE = 4;
 
     public final Memory memory;
     public final Screen screen;
@@ -49,26 +56,31 @@ public class Interpreter
     public int pc = 0x200;
     public int sp;
     public int index;
-    public int register[] = new int[16];
-    public int stack[] = new int[16];
+    public int[] register = new int[16];
+    public int[] stack = new int[16];
 
     private final int[] backtrace = new int[BACKTRACE_SIZE];
     private int backtraceReadPtr = 0;
     private int backtraceWritePtr = 0;
 
-    private int waitFlags;
-
     // keyboard handling
-    private int pressedKey;
-    private int keyDestReg;
+    int pressedKey;
+    int keyDestReg;
 
     private static final int RAND_SEED = 0xdeadbeef;
 
     private final Random rnd = new Random( RAND_SEED );
 
-    private volatile Consumer<Interpreter> resetHook;
+    private volatile Consumer<Emulator> resetHook;
 
-    public Interpreter(Memory memory, Screen screen, Keyboard keyboard, Timer soundTimer, Timer delayTimer, Consumer<Interpreter> resetHook) {
+    public Emulator(Memory memory, Screen screen, Keyboard keyboard, Timer soundTimer, Timer delayTimer, Consumer<Emulator> resetHook)
+    {
+        Validate.notNull(memory, "memory must not be null");
+        Validate.notNull(screen, "screen must not be null");
+        Validate.notNull(keyboard, "keyboard must not be null");
+        Validate.notNull(soundTimer, "soundTimer must not be null");
+        Validate.notNull(delayTimer, "delayTimer must not be null");
+        Validate.notNull(resetHook, "resetHook must not be null");
         this.memory = memory;
         this.screen = screen;
         this.keyboard = keyboard;
@@ -78,27 +90,33 @@ public class Interpreter
         reset();
     }
 
-    public void setResetHook(Consumer<Interpreter> resetHook)
+    /**
+     * Set callback to execute after the emulator gets reset.
+     *
+     * This is useful to setup things like the program to execute etc.
+     * @param resetHook
+     */
+    public void setResetHook(Consumer<Emulator> resetHook)
     {
         Validate.notNull(resetHook, "resetHook must not be null");
         this.resetHook = resetHook;
     }
 
-    public void soundTimerTriggered() {
-        screen.setBeep(false);
-    }
-
-    public void delayTimerTriggered()
-    {
-        waitFlags &= ~FLAG_WAIT_DELAY;
-    }
-
+    /**
+     * Resets the emulator.
+     *
+     * The screen and memory will be cleared, all timers are
+     * reset, all registers are set to zero and the PC is set to 0x200.
+     * Afterwards
+     * @see #setResetHook(Consumer)
+     */
     public void reset()
     {
         soundTimer.reset();
         delayTimer.reset();
 
         rnd.setSeed( RAND_SEED );
+
         // memory must be reset BEFORE screen
         // as screen is going to store glyph data in memory
         memory.reset();
@@ -113,71 +131,27 @@ public class Interpreter
         pc = 0x200;
         sp = 0;
         index = 0;
-        waitFlags = 0;
 
         resetHook.accept( this );
     }
 
-    private static void debug(String msg)
+    /**
+     * Executes the instruction at the current PC.
+     *
+     * @param cmdQueue command queue, used to suspend the emulation while waiting for external events
+     *                 like key presses or the delay timer
+     */
+    void executeOneInstruction(CommandQueue cmdQueue)
     {
-        if ( DEBUG )
-        {
-            System.out.println( "DEBUG: " + msg );
-        }
-    }
-
-    private static void trace(String msg) {
-        if ( TRACE )
-        {
-            System.out.println( "trace: " + msg );
-        }
-    }
-
-    private static void traceKeyboard(String msg)
-    {
-        if ( TRACE_KEYBOARD)
-        {
-            System.out.println( "trace: " + msg );
-        }
-    }
-
-    public void tick()
-    {
-        if ( waitFlags == 0 )
-        {
-            if ( CAPTURE_BACKTRACE ) {
-                backtrace[ backtraceWritePtr ] = pc;
-                backtraceWritePtr++;
-                if ( backtraceWritePtr == BACKTRACE_SIZE ) {
-                    backtraceWritePtr = 0;
-                    backtraceReadPtr = (backtraceReadPtr+1) % BACKTRACE_SIZE;
-                }
+        if ( CAPTURE_BACKTRACE ) {
+            backtrace[ backtraceWritePtr ] = pc;
+            backtraceWritePtr++;
+            if ( backtraceWritePtr == BACKTRACE_SIZE ) {
+                backtraceWritePtr = 0;
+                backtraceReadPtr = (backtraceReadPtr+1) % BACKTRACE_SIZE;
             }
-
-            executeInstruction();
         }
-    }
 
-    public void keyPressed(int key) {
-        if ( ( waitFlags & FLAG_WAIT_KEY_PRESS) != 0 )
-        {
-            pressedKey = key;
-            waitFlags &= ~FLAG_WAIT_KEY_PRESS;
-            waitFlags |= FLAG_WAIT_KEY_RELEASE;
-        }
-    }
-
-    public void keyReleased(int key)
-    {
-        if ( ( waitFlags & FLAG_WAIT_KEY_RELEASE) != 0 && key == pressedKey )
-        {
-            register[ keyDestReg ] = key;
-            waitFlags &= ~FLAG_WAIT_KEY_RELEASE;
-        }
-    }
-
-    private void executeInstruction()
-    {
         if ( DEBUG )
         {
             final List<String> lines = Disassembler.disAsm( memory, pc, 1 );
@@ -397,7 +371,7 @@ public class Interpreter
                 int height = (data & 0x0f);
                 if (TRACE)
                     trace("drawSprite @ 0x" + Integer.toHexString(index) + ": x=" + x + ",y=" + y + ",h=" + height);
-                register[0x0f] = screen.drawSpriteFast(x, y, height, index) ? 1 : 0;
+                register[0x0f] = screen.drawSprite(x, y, height, index) ? 1 : 0;
                 break;
             case 0xe0:
                 int key = register[cmd & 0x0f];
@@ -406,7 +380,7 @@ public class Interpreter
                     // 0xek9e 	skpr k 	skip if key (register rk) pressed
                     // The key is a key number, see the chip-8 documentation
                     final boolean pressed = keyboard.isKeyPressed(key);
-                    if (TRACE) trace("keyPressed( " + key + ") => " + pressed);
+                    if (TRACE_KEYBOARD) trace("keyPressed( " + key + ") => " + pressed);
                     if (pressed)
                     {
                         pc += 2;
@@ -416,7 +390,7 @@ public class Interpreter
                 {
                     // 0xeka1 	skup k 	skip if key (register rk) not pressed
                     final boolean notPressed = !keyboard.isKeyPressed(key);
-                    if (TRACE) trace("keyNotPressed( " + key + ") => " + notPressed);
+                    if (TRACE_KEYBOARD) trace("keyNotPressed( " + key + ") => " + notPressed);
                     if (notPressed)
                     {
                         pc += 2;
@@ -439,13 +413,13 @@ public class Interpreter
                     case 0x0a:   // 0xfr0a	key vr wait for keypress,put key in register vr
                         if (TRACE_KEYBOARD) traceKeyboard("Waiting for keypress");
                         keyDestReg = r0;
-                        waitFlags |= FLAG_WAIT_KEY_PRESS;
+                        cmdQueue.set(EmulatorDriver.FLAG_WAIT_KEY_PRESS);
                         break;
                     case 0x15:   // 0xfr15	sdelay vr 	set the delay timer to vr
                         if (TRACE) trace("delay-timer = " + Integer.toHexString(register[r0]));
                         if (register[r0] > 0)
                         {
-                            waitFlags |= FLAG_WAIT_DELAY;
+                            cmdQueue.set(EmulatorDriver.FLAG_WAIT_DELAY);
                         }
                         delayTimer.setValue(register[r0]);
                         break;
@@ -528,5 +502,28 @@ public class Interpreter
             }
         }
         throw new RuntimeException("Unhandled opcode: 0x"+Integer.toHexString(cmd<<8|data)+" at address 0x"+Integer.toHexString(pc-2));
+    }
+
+    private static void debug(String msg)
+    {
+        if ( DEBUG )
+        {
+            System.out.println( "DEBUG: " + msg );
+        }
+    }
+
+    private static void trace(String msg) {
+        if ( TRACE )
+        {
+            System.out.println( "trace: " + msg );
+        }
+    }
+
+    private static void traceKeyboard(String msg)
+    {
+        if ( TRACE_KEYBOARD)
+        {
+            System.out.println( "trace: " + msg );
+        }
     }
 }

@@ -20,6 +20,11 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Lexer.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public final class Lexer
 {
     private static final Pattern BINARY_NUMBER = Pattern.compile("%[01]+");
@@ -38,6 +43,11 @@ public final class Lexer
         this.scanner = scanner;
     }
 
+    /**
+     * Peek at the next token.
+     *
+     * @return
+     */
     public Token peek()
     {
         if ( tokens.isEmpty() ) {
@@ -46,6 +56,11 @@ public final class Lexer
         return tokens.get(0);
     }
 
+    /**
+     * Consume the next token.
+     *
+     * @return
+     */
     public Token next() {
         if ( tokens.isEmpty() ) {
             parse();
@@ -53,6 +68,11 @@ public final class Lexer
         return tokens.remove(0);
     }
 
+    /**
+     * Returns whether the next token is of type {@link TokenType#EOF}.
+     *
+     * @return
+     */
     public boolean eof()
     {
         return peek().is( TokenType.EOF);
@@ -151,20 +171,33 @@ public final class Lexer
         tokens.add( new Token( TokenType.TEXT,s,startOffset) );
     }
 
+    /**
+     * Inserts a token back at the top of the token stream.
+     * @param token
+     */
     public void pushBack(Token token)
     {
         this.tokens.add(0,token);
     }
 
+    /**
+     * Switches the lexer between skipping/honoring whitespace.
+     *
+     * @param newState
+     */
     public void setSkipWhitespace(boolean newState)
     {
-        this.skipWhitespace = skipWhitespace;
+        this.skipWhitespace = newState;
         if ( ! tokens.isEmpty() ) {
             scanner.setOffset( tokens.get(0).offset );
             tokens.clear();
         }
     }
 
+    /**
+     * Returns the scanner used by this lexer.
+     * @return
+     */
     public Scanner getScanner()
     {
         return scanner;

@@ -15,6 +15,11 @@
  */
 package de.codesourcery.chip8.asm.ast;
 
+/**
+ * Number literal AST node.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class NumberNode extends ASTNode
 {
     public final int value;

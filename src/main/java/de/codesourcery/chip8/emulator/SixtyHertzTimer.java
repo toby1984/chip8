@@ -15,14 +15,22 @@
  */
 package de.codesourcery.chip8.emulator;
 
+import org.apache.commons.lang3.Validate;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * A timer that invokes listeners ever 1/60th second.
+ *
+ * Used to implement the delay and sound timers.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class SixtyHertzTimer extends Thread
 {
-    private final List<Runnable> listeners = new ArrayList<>();
-
-    private int modificationCount = 0;
+    private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
 
     private volatile boolean terminate;
     private final Object SLEEP_LOCK = new Object();
@@ -33,22 +41,26 @@ public class SixtyHertzTimer extends Thread
         setName("60-hertz-timer");
     }
 
+    /**
+     * Add listener to be invoked every 1/60th second.
+     *
+     * @param r
+     */
     public void addListener(Runnable r)
     {
-        synchronized (listeners)
-        {
-            this.listeners.add( r );
-            modificationCount++;
-        }
+        Validate.notNull(r, "r must not be null");
+        this.listeners.add( r );
     }
 
+    /**
+     * Remove listener to be invoked every 1/60th second.
+     *
+     * @param r
+     */
     public void removeListener(Runnable r)
     {
-        synchronized (listeners)
-        {
-            this.listeners.remove( r );
-            modificationCount++;
-        }
+        Validate.notNull(r, "r must not be null");
+        this.listeners.remove( r );
     }
 
     @Override
@@ -58,25 +70,16 @@ public class SixtyHertzTimer extends Thread
         Runnable[] copy = new Runnable[0];
         while ( ! terminate )
         {
-            synchronized (listeners)
+            listeners.forEach(x ->
             {
-                if ( modCount != modificationCount )
-                {
-                    if ( copy.length != listeners.size() )
-                    {
-                        copy = new Runnable[listeners.size()];
-                    }
-                    for (int i = 0; i < listeners.size(); i++)
-                    {
-                        copy[i] = listeners.get( i );
-                    }
+                try {
+                    x.run();
                 }
-            }
+                catch (RuntimeException e) {
+                    e.printStackTrace();
+                }
+            });
 
-            for (int i = 0, len = copy.length; i < len; i++)
-            {
-                try { copy[i].run(); } catch (RuntimeException e) { e.printStackTrace(); }
-            }
             try
             {
                 synchronized(SLEEP_LOCK)

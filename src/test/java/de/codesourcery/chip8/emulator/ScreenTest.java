@@ -1,12 +1,24 @@
+/**
+ * Copyright 2012 Tobias Gierke <tobias.gierke@code-sourcery.de>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package de.codesourcery.chip8.emulator;
 
 import junit.framework.TestCase;
 import org.apache.commons.lang3.StringUtils;
-import org.junit.Test;
 
 import java.util.Arrays;
-
-import static org.junit.Assert.*;
 
 public class ScreenTest extends TestCase
 {
@@ -37,36 +49,13 @@ public class ScreenTest extends TestCase
             {
                 for (int x = 0; x < (64 - 8); x++)
                 {
-                    screen.drawSpriteFast(x, 1, 8, 0);
+                    screen.drawSprite(x, 1, 8, 0);
                 }
             }
             long end = System.currentTimeMillis();
             best = Math.min( best , end-start );
         }
         System.out.println("FAST TIME (best): "+best+" ms");
-    }
-
-    public void testSlowPerformance()
-    {
-        final byte[] data = new byte[]{1,2,3,4,5,6,7,8};
-
-        memory.write(0,data );
-
-        long best = 12345678;
-        for ( int i = 20; i > 0 ; i-- ) {
-
-            long start = System.currentTimeMillis();
-            for (int j = 0 ; j < 100000 ; j++)
-            {
-                for (int x = 0; x < (64 - 8); x++)
-                {
-                    screen.drawSpriteSlow(x, 1, 8, 0);
-                }
-            }
-            long end = System.currentTimeMillis();
-            best = Math.min( best , end-start );
-        }
-        System.out.println("SLOW TIME (best): "+best+" ms");
     }
 
     public void testDetectClearPixels1()
@@ -84,7 +73,7 @@ public class ScreenTest extends TestCase
             screen.data[1] = (byte) 0xff;
 
             int expected = (0xffff ^ (mask<<(8-x)));
-            boolean pixelsCleared = screen.drawSpriteFast( x,0,1,0);
+            boolean pixelsCleared = screen.drawSprite( x,0,1,0);
             final String lmsg = "x = "+leftPad(Integer.toString(x),2 )+ ", %" + binary( mask,8);
             assertTrue( "Cleared pixel check failed for " + lmsg, pixelsCleared );
             int actual = (screen.data[0] & 0xff) << 8 | (screen.data[1] & 0xff);
@@ -110,7 +99,7 @@ public class ScreenTest extends TestCase
             screen.data[1] = (byte) 0x00;
 
             int expected = (0x0000 ^ (mask<<(8-x)));
-            boolean pixelsCleared = screen.drawSpriteFast( x,0,1,0);
+            boolean pixelsCleared = screen.drawSprite( x,0,1,0);
             final String lmsg = "x = "+leftPad(Integer.toString(x),2 )+ ", %" + binary( mask,8);
             assertFalse( "Cleared pixel check failed for " + lmsg, pixelsCleared );
             int actual = (screen.data[0] & 0xff) << 8 | (screen.data[1] & 0xff);

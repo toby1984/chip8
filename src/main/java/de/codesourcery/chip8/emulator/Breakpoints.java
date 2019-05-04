@@ -1,29 +1,38 @@
+/**
+ * Copyright 2012 Tobias Gierke <tobias.gierke@code-sourcery.de>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package de.codesourcery.chip8.emulator;
 
-import java.util.HashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectIterator;
+
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Stream;
 
-public class Breakpoints
+/**
+ * Performance-optimized collection of temporary and permanent {@link Breakpoints}.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
+public final class Breakpoints
 {
-    public static final int SLOTS = 128;
-
-    private final Map<Integer,Breakpoint>[] nonTemporary =
-            new HashMap[ SLOTS ];
-
-    private final Map<Integer,Breakpoint>[] temporary=
-            new HashMap[ SLOTS ];
+    private final Int2ObjectOpenHashMap<Breakpoint> permanent = new Int2ObjectOpenHashMap<>(20);
+    private final Int2ObjectOpenHashMap<Breakpoint> temporary = new Int2ObjectOpenHashMap<>(20);
 
     private int size;
 
-    public Breakpoints(int memSize) {
-
-        for ( int i = 0 ; i < SLOTS ; i++ )
-        {
-            nonTemporary[i] = new HashMap<>(3);
-            temporary[i] = new HashMap<>(3);
-        }
+    public Breakpoints() {
     }
 
     public int size() {
@@ -31,11 +40,11 @@ public class Breakpoints
     }
 
     public boolean isEmpty() {
-        return size == 0;
+        return size() == 0;
     }
 
     public boolean isNotEmpty() {
-        return size != 0;
+        return ! isEmpty();
     }
 
     public void add(Breakpoint bp) {
@@ -49,19 +58,15 @@ public class Breakpoints
 
     public void remove(Breakpoint bp)
     {
-        final Map<Integer, Breakpoint> map = getMap( bp.address, bp.isTemporary );
+        final Int2ObjectOpenHashMap<Breakpoint> map = getMap( bp.address, bp.isTemporary );
         if ( map.remove( bp.address ) != null ) {
             size--;
         }
     }
 
-    private Map<Integer,Breakpoint> getMap(int address, boolean isTemporary)
+    private Int2ObjectOpenHashMap<Breakpoint> getMap(int address, boolean isTemporary)
     {
-        final int slotNo = address % SLOTS;
-        if ( isTemporary ) {
-            return temporary[slotNo];
-        }
-        return nonTemporary[slotNo];
+        return isTemporary ? temporary : permanent;
     }
 
     public boolean checkBreakpointHit(int address)
@@ -69,49 +74,42 @@ public class Breakpoints
         if ( size == 0 ) {
             return false;
         }
-        final int slotNo = address % SLOTS;
-        Map<Integer, Breakpoint> map = temporary[slotNo];
-        Integer key = null;
-        if ( ! map.isEmpty() )
+        if ( temporary.containsKey(address) )
         {
-            key = address;
-            if ( map.containsKey( key ) )
-            {
-                map.remove( key );
-                return true;
-            }
+            temporary.remove(address);
+            return true;
         }
-        map = nonTemporary[slotNo];
-        if ( ! map.isEmpty() )
-        {
-            if ( key == null ) {
-                key = address;
-            }
-            return map.containsKey( key );
-        }
-        return false;
+        return permanent.containsKey(address);
     }
 
     public void clear()
     {
-        Stream.of( temporary ).forEach( map -> map.clear() );
-        Stream.of( nonTemporary ).forEach( map -> map.clear() );
+        temporary.clear();
+        permanent.clear();
         size = 0;
     }
 
     public void getAll(List<Breakpoint> destination)
     {
-        Stream.of( temporary ).forEach( map -> destination.addAll( map.values() ) );
-        Stream.of( nonTemporary ).forEach( map -> destination.addAll( map.values() ) );
+        destination.addAll( temporary.values() );
+        destination.addAll( permanent.values() );
     }
 
     public boolean contains(Breakpoint bp)
     {
-        final int slotNo = bp.address % SLOTS;
-        final Integer key = bp.address;
         if ( bp.isTemporary ) {
-            return temporary[ slotNo ].containsKey(key);
+            return temporary.containsKey(bp.address);
         }
-        return nonTemporary[ slotNo ].containsKey(key);
+        return permanent.containsKey(bp.address);
+    }
+
+    public void clearTemporary()
+    {
+        final int tmpCount = temporary.size();
+        if ( size - tmpCount < 0 ) {
+            throw new IllegalStateException("Internal error, negative size ?");
+        }
+        size -= tmpCount;
+        temporary.clear();
     }
 }

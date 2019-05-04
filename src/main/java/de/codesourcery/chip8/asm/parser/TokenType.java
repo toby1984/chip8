@@ -15,17 +15,23 @@
  */
 package de.codesourcery.chip8.asm.parser;
 
+/**
+ * Available token types.
+ * @author tobias.gierke@code-sourcery.de
+ */
 public enum TokenType
 {
-    TEXT,
-    HEX_NUMBER,
-    DECIMAL_NUMBER,
-    BINARY_NUMBER,
+    TEXT, // anything that's not one of the other tokens
+    // numbers
+    HEX_NUMBER, // 0x1234
+    DECIMAL_NUMBER, // 12345
+    BINARY_NUMBER, // %1010110
+    // v<NUMBER>
     REGISTER,
-    COMMA,
-    COLON,
-    WHITESPACE,
-    NEWLINE,
-    SEMICOLON,
-    EOF
+    COMMA, // ','
+    COLON, // ':'
+    WHITESPACE, // tab or space
+    NEWLINE, // 0x0a
+    SEMICOLON, // ';'
+    EOF // end of input
 }

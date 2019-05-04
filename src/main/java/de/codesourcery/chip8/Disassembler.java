@@ -20,6 +20,11 @@ import de.codesourcery.chip8.emulator.Memory;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Disassembler.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class Disassembler
 {
     private static final StringBuffer buffer = new StringBuffer();
@@ -41,6 +46,16 @@ public class Disassembler
         buffer.append(hi).append(low);
     }
 
+    /**
+     * Disassemble's N words starting at a given address.
+     *
+     * This method will automatically wrap around at the end of memory.
+     *
+     * @param memory
+     * @param startAddress
+     * @param words number of words to disassembly
+     * @return disassembled lines, one for each word
+     */
     public static List<String> disAsm(Memory memory, int startAddress, int words)
     {
         result.clear();
@@ -80,16 +95,6 @@ public class Disassembler
             {
                 // 0x00EE 	rts 	return from subroutine call
                 buffer.append("rts");
-            }
-            else if ( data == 0xfe )
-            {
-                // 0x00FE 	low 	disable extended screen mode 	Super only
-                buffer.append("low");
-            }
-            else if ( data == 0xff )
-            {
-                // 0x00FF 	high 	enable extended screen mode (128 x 64) 	Super only
-                buffer.append("high");
             } else {
                 illegalInstruction();
             }
@@ -220,17 +225,8 @@ public class Disassembler
             int x = cmd & 0x0f;
             int y = (data & 0xf0)>>>4;
             int height = (data & 0x0f);
-            if ( height != 0x00 )
-            {
-                buffer.append("draw ").append(x).append(",")
-                        .append(y).append(",").append(height);
-            }
-            else
-            {
-                // 0xdry0 	xsprite rx,ry 	Draws extended sprite at screen location rx,ry
-                // As above,but sprite is always 16 x 16. Superchip only, not yet implemented
-                buffer.append("xdraw ").append(x).append(",").append(y);
-            }
+            buffer.append("draw ").append(x).append(",")
+                    .append(y).append(",").append(height);
         }
         else if ( (cmd & 0xf0) == 0xe0 )
         {

@@ -15,13 +15,19 @@
  */
 package de.codesourcery.chip8.asm;
 
-import java.util.Objects;
 import java.util.regex.Pattern;
 
+/**
+ * An identifier.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class Identifier
 {
-    public final String value;
+    // valid identifiers look like this
     private static final Pattern ID = Pattern.compile("[_a-zA-Z]+[_0-9a-zA-Z]*");
+
+    public final String value;
 
     public Identifier(String value)
     {

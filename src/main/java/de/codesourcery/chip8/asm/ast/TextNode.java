@@ -17,6 +17,11 @@ package de.codesourcery.chip8.asm.ast;
 
 import de.codesourcery.chip8.asm.Identifier;
 
+/**
+ * Text literal AST node.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class TextNode extends ASTNode
 {
     public final String value;

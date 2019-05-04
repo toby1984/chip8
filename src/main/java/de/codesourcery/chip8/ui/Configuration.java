@@ -23,6 +23,14 @@ import java.awt.Point;
 import java.io.File;
 import java.util.Properties;
 
+/**
+ * Application configuration.
+ *
+ * Helper class that wraps a {@link Properties} object to
+ * hide the serialization/deserialization of configuration properties.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public final class Configuration
 {
     private final Properties props;

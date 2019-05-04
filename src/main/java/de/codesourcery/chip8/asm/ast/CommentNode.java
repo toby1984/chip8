@@ -15,6 +15,11 @@
  */
 package de.codesourcery.chip8.asm.ast;
 
+/**
+ * Comment AST node.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class CommentNode extends ASTNode
 {
     public final String value;

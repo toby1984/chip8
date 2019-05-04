@@ -15,24 +15,34 @@
  */
 package de.codesourcery.chip8.ui;
 
-import de.codesourcery.chip8.emulator.InterpreterDriver;
-import de.codesourcery.chip8.emulator.Keyboard;
+import de.codesourcery.chip8.emulator.EmulatorDriver;
 import de.codesourcery.chip8.emulator.Screen;
 
 import javax.swing.JPanel;
+import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 
-public class Panel extends JPanel
+/**
+ * A {@link JPanel} that renders the emulator's screen.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
+public class ScreenPanel extends JPanel
 {
+    private static final boolean SHOW_FPS = false;
+
     private final Object IMAGE_LOCK = new Object();
 
     // @GuardedBy( IMAGE_LOCK )
     private BufferedImage image;
 
-    public Panel(InterpreterDriver driver)
+    // @GuardedBy( IMAGE_LOCK )
+    private long lastPaint;
+
+    public ScreenPanel(EmulatorDriver driver)
     {
         setFocusable( true );
         requestFocusInWindow();
@@ -44,7 +54,7 @@ public class Panel extends JPanel
                 int key = keyCode( e );
                 if ( key != -1 )
                 {
-                    driver.runOnThread(ip -> ip.interpreter.keyboard.keyPressed(key));
+                    driver.runOnThread(ip -> ip.emulator.keyboard.keyPressed(key));
                 }
             }
 
@@ -55,7 +65,7 @@ public class Panel extends JPanel
                 int key = keyCode( e );
                 if ( key != -1 )
                 {
-                    driver.runOnThread(ip -> ip.interpreter.keyboard.keyReleased(key));
+                    driver.runOnThread(ip -> ip.emulator.keyboard.keyReleased(key));
                 }
             }
 
@@ -71,6 +81,7 @@ public class Panel extends JPanel
                         return 0x03;
                     case KeyEvent.VK_4:
                         return 0x0c;
+                    // --
                     case KeyEvent.VK_Q:
                         return 0x04;
                     case KeyEvent.VK_W:
@@ -79,6 +90,7 @@ public class Panel extends JPanel
                         return 0x06;
                     case KeyEvent.VK_R:
                         return 0x0d;
+                    // --
                     case KeyEvent.VK_A:
                         return 0x07;
                     case KeyEvent.VK_S:
@@ -87,14 +99,16 @@ public class Panel extends JPanel
                         return 0x09;
                     case KeyEvent.VK_F:
                         return 0x0e;
+                    // --
                     case KeyEvent.VK_Y:
                         return 0x0a;
                     case KeyEvent.VK_X:
-                        return 0x00b;
+                        return 0x000;
                     case KeyEvent.VK_C:
                         return 0x0b;
                     case KeyEvent.VK_V:
                         return 0x0f;
+                    // --
                     default:
                         return -1;
                 }
@@ -123,6 +137,20 @@ public class Panel extends JPanel
                 image = new BufferedImage( Screen.WIDTH, Screen.HEIGHT, BufferedImage.TYPE_BYTE_BINARY );
             }
             g.drawImage( image, 0, 0, getWidth(), getHeight(), null );
+            if ( SHOW_FPS )
+            {
+                final long now = System.currentTimeMillis();
+                if (lastPaint != 0)
+                {
+                    final long elapsed = now - lastPaint;
+                    if (elapsed > 0)
+                    {
+                        g.setColor(Color.RED);
+                        g.drawString("FPS: " + (1000 / elapsed), 10, 50);
+                    }
+                }
+                lastPaint = now;
+            }
         }
     }
 }

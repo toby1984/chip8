@@ -20,10 +20,19 @@ import org.apache.commons.lang3.Validate;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Crude symbol table.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class SymbolTable
 {
     private final Map<Identifier,Symbol> symbols = new HashMap<>();
 
+    /**
+     * A symbol.
+     * @author tobias.gierke@code-sourcery.de
+     */
     public static final class Symbol
     {
         public final Identifier name;
@@ -45,19 +54,34 @@ public class SymbolTable
         }
     }
 
+    /**
+     * Clears this symbol table.
+     */
     public void clear() {
         this.symbols.clear();
     }
 
-    public void add(Identifier identifier)
+    /**
+     * Declares a symbol.
+     * @param identifier symbol name
+     */
+    public void declare(Identifier identifier)
     {
+        Validate.notNull(identifier, "identifier must not be null");
         if ( ! symbols.containsKey( identifier ) ) {
             symbols.put( identifier, new Symbol(identifier ) );
         }
     }
 
-    public void add(Identifier identifier,Object value)
+    /**
+     * Defines a symbol.
+     *
+     * @param identifier symbol name
+     * @param value symbol value (must not be NULL).
+     */
+    public void define(Identifier identifier, Object value)
     {
+        Validate.notNull(identifier, "identifier must not be null");
         Validate.notNull( value, "value must not be null" );
 
         Symbol existing = get( identifier );
@@ -72,6 +96,12 @@ public class SymbolTable
         existing.value = value;
     }
 
+    /**
+     * Get symbol by name.
+     *
+     * @param identifier
+     * @return symbol or <code>null</code> if not found
+     */
     public Symbol get(Identifier identifier) {
         return symbols.get( identifier );
     }

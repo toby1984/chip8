@@ -15,35 +15,55 @@
  */
 package de.codesourcery.chip8.emulator;
 
+import org.apache.commons.lang3.Validate;
+
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Keyboard interface.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public abstract class Keyboard
 {
     private final Set<Integer> pressedKeys = new HashSet<>();
 
+    /**
+     * Tell the emulation that a key has been pressed.
+     *
+     * @param key
+     */
     public void keyPressed(int key) {
-        System.out.println("Pressed: "+key);
-        pressedKeys.add( Integer.valueOf( key ) );
-        getDriver().runOnThread(driver -> driver.interpreter.keyPressed(key) );
+        Validate.isTrue(key>=0 && key <= 0x0f);
+        pressedKeys.add(key);
+        getDriver().keyPressed(key);
     }
 
-    protected abstract InterpreterDriver getDriver();
-
+    /**
+     * Tell the emulation that a key has been released.
+     *
+     * @param key
+     */
     public void keyReleased(int key)
     {
-        System.out.println("Released: "+key);
-        pressedKeys.remove( Integer.valueOf( key ) );
-        getDriver().runOnThread(driver -> driver.interpreter.keyReleased(key) );
+        Validate.isTrue(key>=0 && key <= 0x0f);
+        pressedKeys.remove(key);
+        getDriver().keyReleased(key);
     }
 
     public boolean isKeyPressed(int key)
     {
-        return pressedKeys.contains( Integer.valueOf( key ) );
+        return pressedKeys.contains(key);
     }
 
+    /**
+     * Clears the internal keyboard buffer.
+     */
     public void reset()
     {
         pressedKeys.clear();
     }
+
+    protected abstract EmulatorDriver getDriver();
 }

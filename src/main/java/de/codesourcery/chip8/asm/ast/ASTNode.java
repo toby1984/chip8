@@ -18,8 +18,28 @@ package de.codesourcery.chip8.asm.ast;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Superclass for AST nodes.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class ASTNode
 {
+    /**
+     * AST node visitor.
+     */
+    @FunctionalInterface
+    public interface Visitor
+    {
+        /**
+         * Visit an AST node.
+         *
+         * @param node node to visit
+         * @param depth Depth of this node, relative to iteration start.
+         */
+        void visit(ASTNode node,int depth);
+    }
+
     public final List<ASTNode> children = new ArrayList<>();
     public ASTNode parent;
 
@@ -28,15 +48,28 @@ public class ASTNode
     public ASTNode() {
     }
 
+    /**
+     * Create instance with a specific region.
+     * @param region
+     */
     public ASTNode(TextRegion region) {
         this.region = region;
     }
 
+    /**
+     * Returns the source region covered by this specific AST node.
+     *
+     * @return
+     */
     public TextRegion getRegion()
     {
         return region;
     }
 
+    /**
+     * Returns the source region covered by this specific AST node and all of its child nodes (if any).
+     * @return
+     */
     public TextRegion getCombinedRegion()
     {
         TextRegion result = region == null ? null : region.createCopy();
@@ -52,16 +85,32 @@ public class ASTNode
         return result;
     }
 
+    /**
+     * Add a child node.
+     *
+     * @param node
+     */
     public void add(ASTNode node)
     {
         node.parent = this;
         this.children.add( node );
     }
 
+    /**
+     * Returns the number of child nodes.
+     *
+     * @return
+     */
     public int childCount() {
         return children.size();
     }
 
+    /**
+     * Returns the child at a given index.
+     *
+     * @param idx
+     * @return
+     */
     public ASTNode child(int idx) {
         return children.get(idx);
     }
@@ -72,15 +121,15 @@ public class ASTNode
         return "ASTNode";
     }
 
-    public interface Visitor {
-        public void visit(ASTNode node,int depth);
-    }
-
+    /**
+     * Traverse the subtree starting at this node in-order.
+     * @param visitor
+     */
     public void visitInOrder(Visitor visitor) {
         visitInOrder(visitor,0);
     }
 
-    public void visitInOrder(Visitor visitor,int depth)
+    private void visitInOrder(Visitor visitor, int depth)
     {
         visitor.visit( this, depth );
         children.forEach( c -> c.visitInOrder( visitor, depth+1 ) );

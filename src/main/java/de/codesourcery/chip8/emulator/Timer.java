@@ -15,6 +15,14 @@
  */
 package de.codesourcery.chip8.emulator;
 
+import org.apache.commons.lang3.Validate;
+
+/**
+ * Abstract base-class for the sound and delay timers.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ * @see SixtyHertzTimer
+ */
 public abstract class Timer implements Runnable
 {
     private final String name;
@@ -24,8 +32,14 @@ public abstract class Timer implements Runnable
     // @GuardedBy( LOCK )
     private int value;
 
+    /**
+     * Create instance.
+     *
+     * @param name timer name (debugging only)
+     */
     public Timer(String name)
     {
+        Validate.notBlank( name, "name must not be null or blank");
         this.name = name;
     }
 
@@ -54,22 +68,36 @@ public abstract class Timer implements Runnable
         }
     }
 
-    public void reset() {
+    /**
+     * Stops this timer.
+     */
+    public void reset()
+    {
         synchronized (LOCK)
         {
             value = 0;
         }
     }
 
+    /**
+     * Sets the timer's current value.
+     *
+     * @param value
+     */
     public void setValue(int value)
     {
         synchronized (LOCK)
         {
-            this.value = value;
+            this.value = value & 0xff;
         }
     }
 
-    public int value() {
+    /**
+     * Returns the timer's current value.
+     * @return
+     */
+    public int value()
+    {
         synchronized (LOCK)
         {
             return value;

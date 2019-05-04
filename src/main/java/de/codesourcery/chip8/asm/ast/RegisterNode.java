@@ -15,6 +15,11 @@
  */
 package de.codesourcery.chip8.asm.ast;
 
+/**
+ * Register literal AST node.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class RegisterNode extends ASTNode
 {
     public final int regNum;

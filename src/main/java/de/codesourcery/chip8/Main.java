@@ -15,8 +15,8 @@
  */
 package de.codesourcery.chip8;
 
-import de.codesourcery.chip8.emulator.Interpreter;
-import de.codesourcery.chip8.emulator.InterpreterDriver;
+import de.codesourcery.chip8.emulator.Emulator;
+import de.codesourcery.chip8.emulator.EmulatorDriver;
 import de.codesourcery.chip8.emulator.Keyboard;
 import de.codesourcery.chip8.emulator.Memory;
 import de.codesourcery.chip8.emulator.Screen;
@@ -34,6 +34,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 import java.util.function.Consumer;
 
+/**
+ * Emulator UI main class to be invoked from the command line.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class Main
 {
     public static final String PROGRAM_CLASSPATH = "/space_invaders.ch8";
@@ -41,7 +46,7 @@ public class Main
     private static final SixtyHertzTimer timer60Hz =new SixtyHertzTimer();
     private static final Timer soundTimer = new Timer( "sound" )
     {
-        private final InterpreterDriver.IDriverCallback cb = ip -> ip.interpreter.soundTimerTriggered();
+        private final EmulatorDriver.IDriverCallback cb = ip -> ip.emulator.screen.setBeep(false);
 
         @Override
         protected void triggered()
@@ -52,7 +57,7 @@ public class Main
 
     private static final Timer delayTimer = new Timer( "delay" )
     {
-        private final InterpreterDriver.IDriverCallback cb = ip -> ip.interpreter.delayTimerTriggered();
+        private final EmulatorDriver.IDriverCallback cb = ip -> ip.delayTimerTriggered();
 
         @Override
         protected void triggered()
@@ -60,13 +65,13 @@ public class Main
             driver.runOnThread(cb);
         }
     };
-    private static InterpreterDriver driver;
+    private static EmulatorDriver driver;
     private static final Memory memory = new Memory( 4096);
     private static final Screen screen = new Screen( memory );
     private static final Keyboard keyboard = new Keyboard() {
 
         @Override
-        protected InterpreterDriver getDriver()
+        protected EmulatorDriver getDriver()
         {
             return driver;
         }
@@ -122,7 +127,7 @@ public class Main
             }
         };
 
-        final Consumer<Interpreter> hook = emu ->
+        final Consumer<Emulator> hook = emu ->
         {
             try
             {
@@ -150,8 +155,8 @@ public class Main
             }
         };
 
-        final Interpreter ip = new Interpreter( memory,screen, keyboard, soundTimer, delayTimer, hook);
-        driver = new InterpreterDriver(ip);
+        final Emulator ip = new Emulator( memory,screen, keyboard, soundTimer, delayTimer, hook);
+        driver = new EmulatorDriver(ip);
 
         driver.setSpeed( 0.5f );
 

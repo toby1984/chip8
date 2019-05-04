@@ -32,11 +32,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Parser.
+ *
+ * @author tobias.gierke@code-sourcery.de
+ */
 public class Parser
 {
     private final Lexer lexer;
-
-    private ASTNode ast;
 
     public Parser(Lexer lexer)
     {
@@ -55,63 +58,23 @@ public class Parser
         }
     }
 
-    private void printError(String msg,int offset)
-    {
-        final String text = lexer.getScanner().getText();
-        final String[] lines = text.split("\n");
-        int lineStartOffset = 0;
-        int lineNo = 1;
-        for ( String line : lines )
-        {
-            final int lineEnd = lineStartOffset + line.length();
-//            System.err.println("Line "+lineNo+" ("+lineStartOffset+" - "+lineEnd+"): "+line);
-            if ( lineStartOffset <= offset && offset <= lineEnd )
-            {
-                int regionStart = Math.max( lineStartOffset, offset-10);
-                int regionEnd = Math.min( lineEnd, offset+10);
-                final String errLine =
-                        line.substring( regionStart-lineStartOffset, regionEnd-lineStartOffset );
-                final int col = offset - lineStartOffset;
-                System.err.println( "Error at line "+lineNo+", column "+col);
-                System.err.println( errLine );
-                final int indent = offset - regionStart;
-                System.err.println( StringUtils.repeat(' ',indent)+"^ "+msg);
-                return;
-            }
-            lineStartOffset = lineEnd+1;
-            lineNo++;
-        }
-        if ( lines.length > 0 && offset == lineStartOffset)
-        {
-            final int col = offset - lineStartOffset;
-            System.err.println( "Error at line "+lineNo+", column "+col);
-            System.err.println( lines[lines.length - 1] );
-        }
-        else
-        {
-            System.err.println( "Failed to find src line for offset " + offset );
-        }
-        System.err.println("ERROR: "+msg);
-    }
-
     private ASTNode internalParse() {
 
-        ast = new ASTNode();
-
+        final ASTNode ast = new ASTNode();
         while ( ! lexer.eof() )
         {
             while ( lexer.peek().is(TokenType.NEWLINE) ) {
                 lexer.next();
             }
-            if ( lexer.eof() ) {
-                break;
-            }
-            ASTNode stmt = parseStatement();
-            if ( stmt == null )
+            if ( ! lexer.eof() )
             {
-                throw new RuntimeException("Parse error");
+                ASTNode stmt = parseStatement();
+                if (stmt == null)
+                {
+                    throw new RuntimeException("Parse error");
+                }
+                ast.add(stmt);
             }
-            ast.add( stmt );
         }
         return ast;
     }
@@ -214,6 +177,8 @@ public class Parser
                 return new RegisterNode( regNum, tok.region() );
             case TEXT:
                 return new TextNode( lexer.next().value, tok.region() );
+            default:
+                // not a valid operand
         }
         return null;
     }
@@ -778,5 +743,44 @@ public class Parser
             }
             return count;
         }
+    }
+
+    private void printError(String msg,int offset)
+    {
+        final String text = lexer.getScanner().getText();
+        final String[] lines = text.split("\n");
+        int lineStartOffset = 0;
+        int lineNo = 1;
+        for ( String line : lines )
+        {
+            final int lineEnd = lineStartOffset + line.length();
+//            System.err.println("Line "+lineNo+" ("+lineStartOffset+" - "+lineEnd+"): "+line);
+            if ( lineStartOffset <= offset && offset <= lineEnd )
+            {
+                int regionStart = Math.max( lineStartOffset, offset-10);
+                int regionEnd = Math.min( lineEnd, offset+10);
+                final String errLine =
+                    line.substring( regionStart-lineStartOffset, regionEnd-lineStartOffset );
+                final int col = offset - lineStartOffset;
+                System.err.println( "Error at line "+lineNo+", column "+col);
+                System.err.println( errLine );
+                final int indent = offset - regionStart;
+                System.err.println( StringUtils.repeat(' ',indent)+"^ "+msg);
+                return;
+            }
+            lineStartOffset = lineEnd+1;
+            lineNo++;
+        }
+        if ( lines.length > 0 && offset == lineStartOffset)
+        {
+            final int col = offset - lineStartOffset;
+            System.err.println( "Error at line "+lineNo+", column "+col);
+            System.err.println( lines[lines.length - 1] );
+        }
+        else
+        {
+            System.err.println( "Failed to find src line for offset " + offset );
+        }
+        System.err.println("ERROR: "+msg);
     }
 }

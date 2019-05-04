@@ -15,27 +15,15 @@
  */
 package de.codesourcery.chip8.emulator;
 
-import org.apache.commons.lang3.StringUtils;
-
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * The original implementation of the Chip-8 language used a 64x32-pixel monochrome display
- * with this format.
+ * The emulation's 64x32-pixel monochrome display.
  *
- * More recently, Super Chip-48, an interpreter for the HP48 calculator, added a 128x64-pixel mode.
- * This mode is now supported by most of the interpreters on other platforms.
- *
- * Chip-8 draws graphics on screen through the use of sprites. A sprite is a group of bytes which
- * are a binary representation of the desired picture.
- * Chip-8 sprites may be up to 15 bytes, for a possible sprite size of 8x15.
- *
- * Programs may also refer to a group of sprites representing the hexadecimal digits 0 through F.
- * These sprites are 5 bytes long, or 8x5 pixels.
- * The data should be stored in the interpreter area of Chip-8 memory (0x000 to 0x1FF).
+ * @author tobias.gierke@code-sourcery.de
  */
 public class Screen
 {
@@ -43,6 +31,7 @@ public class Screen
 
     public static final int WIDTH = 64;
     public static final int HEIGHT = 32;
+
     // Mask used to make sure out-of-range coordinates
     // get mapped back to within the screen array
     // (64*32)/8
@@ -52,8 +41,6 @@ public class Screen
 
     // enough data to hold either standard or extended mode display
     final byte[] data = new byte[ (WIDTH*HEIGHT)/8 ];
-    final byte[] dataCopy1 = new byte[ (WIDTH*HEIGHT)/8 ];
-    final byte[] dataCopy2 = new byte[ (WIDTH*HEIGHT)/8 ];
 
     private final Memory memory;
     private boolean isBeeping;
@@ -122,43 +109,7 @@ public class Screen
      * @param spriteAddr
      * @return <code>true</code> if at least one pixel was cleared by this operation, otherwise <code>false</code>
      */
-//    public boolean drawSprite(int x, int y, int byteCount, int spriteAddr)
-//    {
-//        System.arraycopy(data,0, dataCopy2,0,data.length);
-//        boolean result1 = drawSpriteFast(x,y,byteCount,spriteAddr);
-//        System.arraycopy(data,0,dataCopy1,0,data.length);
-//
-//        System.arraycopy(dataCopy2,0,data,0,data.length);
-//        boolean result2 = drawSpriteSlow(x,y,byteCount,spriteAddr);
-//        if ( result1 != result2 ) {
-//            throw new RuntimeException("Pixel detection failure");
-//        }
-//        for ( int i = 0 ; i < data.length ; i++ ) {
-//            if ( data[i] != dataCopy1[i] ) {
-//                throw new RuntimeException("Pixel rendering failure");
-//            }
-//        }
-//        return result2;
-//    }
-
-    /**
-     * Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
-     *
-     * The interpreter reads n bytes from memory,
-     * starting at the address stored in I.
-     * These bytes are then displayed as sprites on screen at coordinates
-     * (Vx, Vy).
-     * Sprites are XORed onto the existing screen.
-     * If this causes any pixels to be erased, VF is set to 1, otherwise it is set to 0.
-     * If the sprite is positioned so part of it is outside the coordinates of the display,
-     * it wraps around to the opposite side of the screen.
-     * @param x
-     * @param y
-     * @param byteCount
-     * @param spriteAddr
-     * @return <code>true</code> if at least one pixel was cleared by this operation, otherwise <code>false</code>
-     */
-    public boolean drawSpriteFast(int x, int y, int byteCount, int spriteAddr)
+    public boolean drawSprite(int x, int y, int byteCount, int spriteAddr)
     {
         int clearedPixels = 0;
         int srcPtr = spriteAddr;
@@ -166,7 +117,7 @@ public class Screen
         int rightShift = x-((x/8)*8);
         if ( rightShift == 0)
         {
-            // simple byte-copy with stride
+            // simple byte-copy with BYTES_PER_ROW stride
             for ( int toCopy = byteCount ; toCopy > 0 ; toCopy--,srcPtr++)
             {
                 int src = memory.read( srcPtr );
@@ -198,75 +149,11 @@ public class Screen
     }
 
     /**
-     * Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+     * Copy the screen's content to a {@link BufferedImage}.
      *
-     * The interpreter reads n bytes from memory,
-     * starting at the address stored in I.
-     * These bytes are then displayed as sprites on screen at coordinates
-     * (Vx, Vy).
-     * Sprites are XORed onto the existing screen.
-     * If this causes any pixels to be erased, VF is set to 1, otherwise it is set to 0.
-     * If the sprite is positioned so part of it is outside the coordinates of the display,
-     * it wraps around to the opposite side of the screen.
-     * @param x
-     * @param y
-     * @param byteCount
-     * @param spriteAddr
-     * @return <code>true</code> if at least one pixel was cleared by this operation, otherwise <code>false</code>
+     * @param image destination image, <b>MUST BE {@link BufferedImage#TYPE_BYTE_BINARY}</b> otherwise
+     *              a {@link ClassCastException} will be thrown.
      */
-    public boolean drawSpriteSlow(int x, int y, int byteCount, int spriteAddr)
-    {
-        x = x % WIDTH;
-        y = y % HEIGHT;
-        boolean pixelsCleared = false;
-
-        int rowStartByteOffset = x/8 + y * BYTES_PER_ROW;
-        final int scrBitOffset = x -(x/8)*8;
-        int scrSetMask = 0b1000_0000 >> scrBitOffset;
-        int scrClearMask = ~scrSetMask;
-
-        for ( int i = 0 ; i < byteCount ; i++ )
-        {
-            int spriteData = memory.read( spriteAddr+i );
-            int spriteReadMask = 0b1000_0000;
-
-            int bitOffset = scrBitOffset;
-            int scrByteOffset = rowStartByteOffset;
-            int screenData = this.data[scrByteOffset];
-            for ( int bit = 0 ; bit < 8 ; bit++)
-            {
-                final boolean spriteBit = (spriteData & spriteReadMask) != 0;
-                final boolean screenBit = (screenData & scrSetMask) != 0;
-                final boolean newValue = spriteBit ^ screenBit;
-                if ( newValue ) {
-                    screenData |= scrSetMask;
-                } else {
-                    screenData &= scrClearMask;
-                    pixelsCleared |= screenBit;
-                }
-                spriteReadMask >>>= 1;
-                scrSetMask >>>= 1;
-                scrClearMask >>= 1;
-                bitOffset++;
-                if ( bitOffset == 8)
-                {
-                    this.data[scrByteOffset] = (byte) screenData;
-                    scrByteOffset = (scrByteOffset+1) & PIXELARRAY_LENGTH_MASK;
-                    screenData = this.data[scrByteOffset];
-                    bitOffset = 0;
-                    scrSetMask    = 0b1000_0000;
-                    scrClearMask  = ~scrSetMask;
-                }
-            }
-            this.data[scrByteOffset] = (byte) screenData;
-            rowStartByteOffset = (rowStartByteOffset+ BYTES_PER_ROW) & PIXELARRAY_LENGTH_MASK;
-            scrSetMask = 0b1000_0000 >> scrBitOffset;
-            scrClearMask = ~scrSetMask;
-        }
-        hasChanged.set(true);
-        return pixelsCleared;
-    }
-
     public void copyTo(BufferedImage image) {
 
         final byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
@@ -284,11 +171,20 @@ public class Screen
         return GLYPH_MEM_START+(glyph*5);
     }
 
+    /**
+     * Enable/disable playing a beep.
+     *
+     * @param onOff
+     */
     public void setBeep(boolean onOff)
     {
         isBeeping = onOff;
     }
 
+    /**
+     * Clears the screen and disables the beeper.
+     * @see #setBeep(boolean)
+     */
     public void reset()
     {
         isBeeping = false;
@@ -296,6 +192,15 @@ public class Screen
         writeGlyphs();
     }
 
+    /**
+     * Check whether the screen's data got changed since the last
+     * call to this method.
+     *
+     * After this method returns the internal 'hasChanged' flag is reset.
+     *
+     * @return <code>true</code> if the screen's data has changed since the last call to this method
+     * @see #copyTo(BufferedImage)
+     */
     public boolean hasChanged() {
         return hasChanged.compareAndExchange( true,false );
     }
