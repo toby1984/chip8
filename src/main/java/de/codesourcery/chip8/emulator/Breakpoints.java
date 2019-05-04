@@ -30,9 +30,11 @@ public final class Breakpoints
     private final Int2ObjectOpenHashMap<Breakpoint> permanent = new Int2ObjectOpenHashMap<>(20);
     private final Int2ObjectOpenHashMap<Breakpoint> temporary = new Int2ObjectOpenHashMap<>(20);
 
+    private final String name;
     private int size;
 
-    public Breakpoints() {
+    public Breakpoints(String name) {
+        this.name = name;
     }
 
     public int size() {
@@ -49,6 +51,7 @@ public final class Breakpoints
 
     public void add(Breakpoint bp) {
 
+        System.out.println("Adding breakpoint "+bp+" to "+this);
         final Breakpoint existing = getMap( bp.address, bp.isTemporary )
                 .put( bp.address, bp );
         if ( existing == null ) {
@@ -58,8 +61,10 @@ public final class Breakpoints
 
     public void remove(Breakpoint bp)
     {
+        System.out.println("Removing "+bp+" from "+this);
         final Int2ObjectOpenHashMap<Breakpoint> map = getMap( bp.address, bp.isTemporary );
         if ( map.remove( bp.address ) != null ) {
+            System.out.println("SUCCESS: Removed "+bp+" from "+this);
             size--;
         }
     }
@@ -74,9 +79,10 @@ public final class Breakpoints
         if ( size == 0 ) {
             return false;
         }
-        if ( temporary.containsKey(address) )
+        Breakpoint hit = temporary.get(address);
+        if ( hit != null )
         {
-            temporary.remove(address);
+            remove(hit);
             return true;
         }
         return permanent.containsKey(address);
@@ -92,7 +98,9 @@ public final class Breakpoints
     public void getAll(List<Breakpoint> destination)
     {
         destination.addAll( temporary.values() );
+        System.out.println("getAll[ "+this+", temporary]: "+destination);
         destination.addAll( permanent.values() );
+        System.out.println("getAll[ "+this+", temporary+permanent]: "+destination);
     }
 
     public boolean contains(Breakpoint bp)
@@ -111,5 +119,11 @@ public final class Breakpoints
         }
         size -= tmpCount;
         temporary.clear();
+    }
+
+    @Override
+    public String toString()
+    {
+        return "Breakpoints[ "+name+" ]";
     }
 }

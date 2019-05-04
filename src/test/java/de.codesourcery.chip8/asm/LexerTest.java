@@ -32,13 +32,28 @@ public class LexerTest extends TestCase
     public void testBlank()
     {
         List<Token> tokens = lex("     \n\n\n    ");
-        assertEquals( "Got "+tokens,0,tokens.size());
+        assertEquals( "Got "+tokens,
+            4,tokens.size());
+        assertEquals(TokenType.NEWLINE, tokens.get(0).type );
+        assertEquals(TokenType.NEWLINE, tokens.get(1).type );
+        assertEquals(TokenType.NEWLINE, tokens.get(2).type );
+        assertEquals(TokenType.EOF, tokens.get(3).type );
     }
 
     public void testInstruction()
     {
         List<Token> tokens = lex("label: jp 0x123 ; comment");
-        assertEquals( "Got "+tokens.stream().map(x->x.toString()).collect( Collectors.joining("\n" ) ),0,tokens.size());
+
+        assertEquals( "Got "+tokens.stream().map(x->x.toString())
+                                 .collect( Collectors.joining("\n" ) ),7,tokens.size());
+
+        assertEquals(TokenType.TEXT, tokens.get(0).type );
+        assertEquals(TokenType.COLON, tokens.get(1).type );
+        assertEquals(TokenType.TEXT, tokens.get(2).type );
+        assertEquals(TokenType.HEX_NUMBER, tokens.get(3).type );
+        assertEquals(TokenType.SEMICOLON, tokens.get(4).type );
+        assertEquals(TokenType.TEXT, tokens.get(5).type );
+        assertEquals(TokenType.EOF, tokens.get(6).type );
     }
 
     public void test1() {

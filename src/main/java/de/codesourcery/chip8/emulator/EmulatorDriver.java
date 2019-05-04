@@ -89,8 +89,8 @@ public class EmulatorDriver
 
     public final Emulator emulator;
 
-    private final Breakpoints enabledBreakpoints = new Breakpoints();
-    private final Breakpoints disabledBreakpoints = new Breakpoints();
+    private final Breakpoints enabledBreakpoints = new Breakpoints("enabled");
+    private final Breakpoints disabledBreakpoints = new Breakpoints("disabled");
 
     private final CopyOnWriteArrayList<Runnable> shutdownListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<IDriverCallback> tickListeners = new CopyOnWriteArrayList<>();
@@ -597,7 +597,7 @@ public class EmulatorDriver
     }
 
     /**
-     * Toggles a breakpoint between enabled/disabled.
+     * Adds a new breakpoint or removes it if it is already registered.
      *
      * If the breakpoint has not been added, nothing bad happens.
      * @param bp
@@ -607,12 +607,11 @@ public class EmulatorDriver
         Validate.notNull(bp, "bp must not be null");
         runOnThread(ip ->
         {
-            if ( enabledBreakpoints.contains(bp) || disabledBreakpoints.contains(bp) ) {
+            if ( enabledBreakpoints.contains(bp) || disabledBreakpoints.contains(bp))
+            {
                 enabledBreakpoints.remove(bp);
                 disabledBreakpoints.remove(bp);
-            }
-            else
-            {
+            } else {
                 enabledBreakpoints.add(bp);
             }
         }, CmdType.CHANGE_BREAKPOINTS);

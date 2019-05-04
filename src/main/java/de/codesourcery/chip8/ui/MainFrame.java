@@ -370,6 +370,7 @@ public class MainFrame extends JFrame
                     startButton.setEnabled( !isRunning );
                     stopButton.setEnabled( isRunning );
                     stepButton.setEnabled( !isRunning );
+                    stepOverButton.setEnabled( !isRunning );
                 });
             }
         };
@@ -434,6 +435,7 @@ public class MainFrame extends JFrame
             private final List<String> lines = new ArrayList<>();
 
             private void toggleBreakpoint(int address) {
+                System.out.println("Toggline breakpoint @ 0x"+Integer.toHexString(address));
                 driver.toggle(new Breakpoint(address,false) );
                 driver.runOnThread(this );
             }
@@ -475,13 +477,15 @@ public class MainFrame extends JFrame
                     final Map<Integer, Breakpoint> bps = new HashMap<>();
                     driver.runOnThread(ip ->
                     {
-                        synchronized (bps)
+                        synchronized(bps)
                         {
                             ip.getAllBreakpoints().stream()
                                 .filter(x -> !x.isTemporary)
                                 .forEach(x -> bps.put(x.address, x));
+                            System.out.println("READ breakpoints:\n"+bps.values());
                         }
                     });
+                    System.out.println("Rendering breakpoint text");
                     synchronized (lines)
                     {
                         synchronized (bps)
