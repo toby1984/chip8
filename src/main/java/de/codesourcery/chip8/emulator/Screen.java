@@ -15,6 +15,8 @@
  */
 package de.codesourcery.chip8.emulator;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.util.Arrays;
@@ -49,7 +51,9 @@ public class Screen
     public static final int BYTES_PER_ROW = WIDTH/8;
 
     // enough data to hold either standard or extended mode display
-    private final byte[] data = new byte[ (WIDTH*HEIGHT)/8 ];
+    final byte[] data = new byte[ (WIDTH*HEIGHT)/8 ];
+    final byte[] dataCopy1 = new byte[ (WIDTH*HEIGHT)/8 ];
+    final byte[] dataCopy2 = new byte[ (WIDTH*HEIGHT)/8 ];
 
     private final Memory memory;
     private boolean isBeeping;
@@ -118,7 +122,99 @@ public class Screen
      * @param spriteAddr
      * @return <code>true</code> if at least one pixel was cleared by this operation, otherwise <code>false</code>
      */
-    public boolean drawSprite(int x, int y, int byteCount, int spriteAddr)
+//    public boolean drawSprite(int x, int y, int byteCount, int spriteAddr)
+//    {
+//        System.arraycopy(data,0, dataCopy2,0,data.length);
+//        boolean result1 = drawSpriteFast(x,y,byteCount,spriteAddr);
+//        System.arraycopy(data,0,dataCopy1,0,data.length);
+//
+//        System.arraycopy(dataCopy2,0,data,0,data.length);
+//        boolean result2 = drawSpriteSlow(x,y,byteCount,spriteAddr);
+//        if ( result1 != result2 ) {
+//            throw new RuntimeException("Pixel detection failure");
+//        }
+//        for ( int i = 0 ; i < data.length ; i++ ) {
+//            if ( data[i] != dataCopy1[i] ) {
+//                throw new RuntimeException("Pixel rendering failure");
+//            }
+//        }
+//        return result2;
+//    }
+
+    /**
+     * Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+     *
+     * The interpreter reads n bytes from memory,
+     * starting at the address stored in I.
+     * These bytes are then displayed as sprites on screen at coordinates
+     * (Vx, Vy).
+     * Sprites are XORed onto the existing screen.
+     * If this causes any pixels to be erased, VF is set to 1, otherwise it is set to 0.
+     * If the sprite is positioned so part of it is outside the coordinates of the display,
+     * it wraps around to the opposite side of the screen.
+     * @param x
+     * @param y
+     * @param byteCount
+     * @param spriteAddr
+     * @return <code>true</code> if at least one pixel was cleared by this operation, otherwise <code>false</code>
+     */
+    public boolean drawSpriteFast(int x, int y, int byteCount, int spriteAddr)
+    {
+        int clearedPixels = 0;
+        int srcPtr = spriteAddr;
+        int dstPtr = (x/8+y*BYTES_PER_ROW) & PIXELARRAY_LENGTH_MASK;
+        int rightShift = x-((x/8)*8);
+        if ( rightShift == 0)
+        {
+            // simple byte-copy with stride
+            for ( int toCopy = byteCount ; toCopy > 0 ; toCopy--,srcPtr++)
+            {
+                int src = memory.read( srcPtr );
+                int dst = data[ dstPtr ] & 0xff;
+                int newValue = src ^ dst;
+                data[dstPtr] = (byte) newValue;
+                clearedPixels |= (src & (~newValue & 0xff));
+                dstPtr = (dstPtr+BYTES_PER_ROW) & PIXELARRAY_LENGTH_MASK;
+            }
+        }
+        else
+        {
+            int mask = 0xff<<(8-rightShift);
+            int dstPtr2 = (dstPtr+1) & PIXELARRAY_LENGTH_MASK;
+            for ( int toCopy = byteCount ; toCopy > 0 ; toCopy--,srcPtr++)
+            {
+                int src  = memory.read( srcPtr )<<(8-rightShift);
+                int dst = ( (data[dstPtr] & 0xff) << 8 | (data[dstPtr2] & 0xff) );
+                int newValue = (dst & ~mask) | ((src ^ dst) & mask);
+                data[dstPtr] = (byte) ((newValue & 0xff00) >>>8);
+                data[dstPtr2] = (byte) newValue;
+                clearedPixels |= (src & (~newValue & mask));
+                dstPtr = (dstPtr+BYTES_PER_ROW) & PIXELARRAY_LENGTH_MASK;
+                dstPtr2 = (dstPtr+1) & PIXELARRAY_LENGTH_MASK;
+            }
+        }
+        hasChanged.set(true);
+        return clearedPixels != 0;
+    }
+
+    /**
+     * Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+     *
+     * The interpreter reads n bytes from memory,
+     * starting at the address stored in I.
+     * These bytes are then displayed as sprites on screen at coordinates
+     * (Vx, Vy).
+     * Sprites are XORed onto the existing screen.
+     * If this causes any pixels to be erased, VF is set to 1, otherwise it is set to 0.
+     * If the sprite is positioned so part of it is outside the coordinates of the display,
+     * it wraps around to the opposite side of the screen.
+     * @param x
+     * @param y
+     * @param byteCount
+     * @param spriteAddr
+     * @return <code>true</code> if at least one pixel was cleared by this operation, otherwise <code>false</code>
+     */
+    public boolean drawSpriteSlow(int x, int y, int byteCount, int spriteAddr)
     {
         x = x % WIDTH;
         y = y % HEIGHT;

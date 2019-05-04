@@ -397,7 +397,7 @@ public class Interpreter
                 int height = (data & 0x0f);
                 if (TRACE)
                     trace("drawSprite @ 0x" + Integer.toHexString(index) + ": x=" + x + ",y=" + y + ",h=" + height);
-                register[0x0f] = screen.drawSprite(x, y, height, index) ? 1 : 0;
+                register[0x0f] = screen.drawSpriteFast(x, y, height, index) ? 1 : 0;
                 break;
             case 0xe0:
                 int key = register[cmd & 0x0f];
@@ -467,7 +467,7 @@ public class Interpreter
                         // // location I,I+1,I+2
                         // Doesn't change I
                         int value = register[r0];
-                        
+
                         int v0 = value/100;
                         value -= v0*100;
                         int v1 = value/10;
