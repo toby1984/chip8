@@ -30,3 +30,4 @@ Maven 3.x, JDK 11+
   - TODO: Currently no support for initializing memory locations to specific values
 - Disassembler
   - Syntax as described in http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
+
