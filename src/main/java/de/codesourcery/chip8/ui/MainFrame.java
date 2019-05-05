@@ -46,9 +46,11 @@ import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.border.Border;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
@@ -57,6 +59,7 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -66,6 +69,8 @@ import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Toolkit;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -90,6 +95,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -112,6 +118,7 @@ public class MainFrame extends JFrame
         CPU("cpu","CPU Registers"),
         BUTTONS("buttons","Buttons"),
         SCREEN("screen","Screen"),
+        SPRITE_VIEW("sprite_view","Sprites"),
         MEMORY("memory","Memory");
 
         private final String id;
@@ -229,6 +236,7 @@ public class MainFrame extends JFrame
         result.add( createDisasmView() );
         result.add( createCPUView() );
         result.add( createAsmView() );
+        result.add( createSpriteView() );
         result.add( createMemoryView() );
         return result;
     }
@@ -237,20 +245,193 @@ public class MainFrame extends JFrame
     {
         return new MyFrame("Memory", ConfigKey.MEMORY, true,false )
         {
+            public static final int BYTES_TO_DUMP = 128;
+            public static final int BYTES_PER_ROW = 16;
+
             private final JTextArea dump = new JTextArea();
+            private final JTextField address = new JTextField("pc");
+
+            private volatile String expression = "pc";
 
             {
                 dump.setEditable(false);
                 configure(dump);
-                getContentPane().add( dump );
+                getContentPane().setLayout(new BorderLayout());
+                getContentPane().add( address, BorderLayout.NORTH);
+                getContentPane().add( dump, BorderLayout.CENTER );
+                address.addActionListener(ev ->
+                {
+                    expression = address.getText();
+                    driver.runOnThread(this);
+                });
+
+                final KeyAdapter adapter = new KeyAdapter()
+                {
+                    @Override
+                    public void keyReleased(KeyEvent e)
+                    {
+                        Function<Integer, Integer> func = null;
+                        switch (e.getKeyCode())
+                        {
+                            case KeyEvent.VK_UP:
+                                func = adr -> adr - BYTES_PER_ROW;
+                                break;
+                            case KeyEvent.VK_PAGE_UP:
+                                func = adr -> adr - BYTES_TO_DUMP / 2;
+                                break;
+                            case KeyEvent.VK_DOWN:
+                                func = adr -> adr + BYTES_PER_ROW;
+                                break;
+                            case KeyEvent.VK_PAGE_DOWN:
+                                func = adr -> adr + BYTES_TO_DUMP / 2;
+                                break;
+                        }
+                        if (func != null)
+                        {
+                            Integer current = driver.runOnThreadWithResult(ip -> evaluate(expression));
+                            if (current != null)
+                            {
+                                current = func.apply(current) % driver.emulator.memory.getSizeInBytes();
+                                expression = "0x" + Integer.toHexString(current);
+                                address.setText(expression);
+                                refresh();
+                            }
+                        }
+                    }
+                };
+                dump.addKeyListener(adapter);
+            }
+
+            private void refresh() {
+                driver.runOnThread(this);
             }
 
             @Override
             public void invoke(EmulatorDriver controller)
             {
-                final int pc = controller.emulator.pc;
-                final String text = controller.emulator.memory.dump(pc,128,16);
-                SwingUtilities.invokeLater(() -> dump.setText(text) );
+                final Integer adr = evaluate(expression);
+                if ( adr != null )
+                {
+                    final String text = controller.emulator.memory.dump(
+                        adr % controller.emulator.memory.getSizeInBytes(),
+                        BYTES_TO_DUMP,
+                        BYTES_PER_ROW);
+                    SwingUtilities.invokeLater(() -> dump.setText(text));
+                }
+            }
+        };
+    }
+
+    private MyFrame createSpriteView()
+    {
+        return new MyFrame("Sprites", ConfigKey.SPRITE_VIEW, true, false)
+        {
+            private static final int BYTES_TO_DISPLAY = 16;
+
+            private JTextField textfield = new JTextField("0x00");
+
+            private volatile String expression = "0x00";
+
+            private final byte[] data = new byte[BYTES_TO_DISPLAY];
+
+            private final JPanel panel = new JPanel() {
+
+                @Override
+                protected void paintComponent(Graphics g)
+                {
+                    super.paintComponent(g);
+
+                    synchronized (data)
+                    {
+                        final int height = getHeight() < BYTES_TO_DISPLAY ? getHeight() : BYTES_TO_DISPLAY;
+                        int w = getWidth()/8;
+                        int h = (int) (getHeight() / (float) height);
+                        int boxSize = Math.min(w,h);
+                        int y0 = 0;
+                        for (int y = 0, ptr = 0 ; y < height ; y++ )
+                        {
+                            int mask = 0b1000_0000;
+                            int value = data[ptr++];
+                            for (int x = 0; x < 8; x++,mask >>>=1 )
+                            {
+                                Color color;
+                                if ( ( value & mask) != 0 ) {
+                                    color = Color.WHITE;
+                                } else {
+                                    color = Color.BLACK;
+                                }
+                                g.setColor(color);
+                                g.fillRect(x*boxSize,y0+(y*boxSize),boxSize,boxSize);
+                            }
+                        }
+                    }
+                }
+            };
+
+            @Override
+            public void invoke(EmulatorDriver controller)
+            {
+                Integer adr = evaluate(expression);
+                if ( adr != null )
+                {
+                    synchronized (data)
+                    {
+                        controller.emulator.memory.read(adr, BYTES_TO_DISPLAY, data);
+                    }
+                }
+            }
+
+            private void refresh() {
+                driver.runOnThread(this);
+                panel.repaint();
+            }
+
+            {
+                getContentPane().setLayout(new BorderLayout());
+                getContentPane().add(textfield, BorderLayout.NORTH );
+                getContentPane().add(panel, BorderLayout.CENTER);
+                textfield.addActionListener( ev ->
+                {
+                    expression = textfield.getText();
+                    refresh();
+                });
+
+                final KeyAdapter adapter = new KeyAdapter()
+                {
+                    @Override
+                    public void keyReleased(KeyEvent e)
+                    {
+                        Function<Integer, Integer> func = null;
+                        switch (e.getKeyCode())
+                        {
+                            case KeyEvent.VK_UP:
+                                func = adr -> adr - 1;
+                                break;
+                            case KeyEvent.VK_PAGE_UP:
+                                func = adr -> adr - BYTES_TO_DISPLAY/2;
+                                break;
+                            case KeyEvent.VK_DOWN:
+                                func = adr -> adr + 1;
+                                break;
+                            case KeyEvent.VK_PAGE_DOWN:
+                                func = adr -> adr + BYTES_TO_DISPLAY/2;
+                                break;
+                        }
+                        if (func != null)
+                        {
+                            Integer current = driver.runOnThreadWithResult(ip -> evaluate(expression));
+                            if (current != null)
+                            {
+                                current = func.apply(current) % driver.emulator.memory.getSizeInBytes();
+                                expression = "0x" + Integer.toHexString(current);
+                                textfield.setText(expression);
+                                refresh();
+                            }
+                        }
+                    }
+                };
+                panel.setFocusable(true);
+                panel.addKeyListener(adapter);
             }
         };
     }
@@ -262,22 +443,18 @@ public class MainFrame extends JFrame
             {
                 final ScreenPanel p = new ScreenPanel( driver );
                 getContentPane().add( p );
-                final AtomicBoolean screenChanged = new AtomicBoolean();
                 swingTimer = new Timer(16, ev ->
                 {
-                    driver.runOnThread(driver ->
+                    final boolean screenChanged = driver.runOnThreadWithResult(driver ->
                     {
                         if (driver.emulator.screen.hasChanged())
                         {
                             p.draw(driver.emulator.screen);
-                            screenChanged.set(true);
+                            return true;
                         }
-                        else
-                        {
-                            screenChanged.set(false);
-                        }
+                        return false;
                     });
-                    if ( screenChanged.get() )
+                    if ( screenChanged )
                     {
                         p.repaint();
                         Toolkit.getDefaultToolkit().sync();
@@ -424,20 +601,41 @@ public class MainFrame extends JFrame
 
     private MyFrame createDisasmView()
     {
-        return new MyFrame("Disasm", ConfigKey.DISASM, true,false) {
+        return new MyFrame("Disasm", ConfigKey.DISASM, true,true) {
+
+            private static final int WORDS_TO_DISASSEMBLE = 16;
+
+            // @GuardedBy( lines )
+            private boolean userProvidedAddress;
 
             // @GuardedBy( lines )
             private int startAddress;
+
             // @GuardedBy( lines )
             private int currentPC;
 
             // @GuardedBy( lines )
             private final List<String> lines = new ArrayList<>();
 
-            private void toggleBreakpoint(int address) {
-                System.out.println("Toggline breakpoint @ 0x"+Integer.toHexString(address));
+            @Override
+            public void stateChanged(EmulatorDriver controller, EmulatorDriver.Reason reason)
+            {
+                synchronized (lines) {
+                    userProvidedAddress = false;
+                }
+            }
+
+            private void toggleBreakpoint(int address)
+            {
+                System.out.println( threadName()+" - Toggling breakpoint @ 0x"+Integer.toHexString(address));
                 driver.toggle(new Breakpoint(address,false) );
+                refresh();
+            }
+
+            private void refresh()
+            {
                 driver.runOnThread(this );
+                panel.repaint();
             }
 
             private final JPanel panel = new JPanel() {
@@ -465,7 +663,41 @@ public class MainFrame extends JFrame
                             }
                         }
                     });
+                    setFocusable(true);
+                    addKeyListener(new KeyAdapter()
+                    {
+                        @Override
+                        public void keyReleased(KeyEvent e)
+                        {
+                            Supplier<Integer> func = null;
+                            switch( e.getKeyCode() )
+                            {
+                                case KeyEvent.VK_PAGE_UP:
+                                    func = () -> (startAddress - 2*(WORDS_TO_DISASSEMBLE/2));
+                                    break;
+                                case KeyEvent.VK_PAGE_DOWN:
+                                    func = () -> (startAddress + 2*(WORDS_TO_DISASSEMBLE/2));
+                                    break;
+                                case KeyEvent.VK_UP:
+                                    func = () -> (startAddress - 2);
+                                    break;
+                                case KeyEvent.VK_DOWN:
+                                    func = () -> startAddress+2;
+                                    break;
+                            }
+                            if ( func != null )
+                            {
+                                synchronized (lines)
+                                {
+                                    userProvidedAddress = true;
+                                    startAddress = func.get() % driver.emulator.memory.getSizeInBytes();
+                                }
+                                refresh();
+                            }
+                        }
+                    });
                 }
+
                 @Override
                 protected void paintComponent(Graphics g)
                 {
@@ -479,17 +711,18 @@ public class MainFrame extends JFrame
                     {
                         synchronized(bps)
                         {
+                            System.out.println( threadName()+" - getting breakpoints");
                             ip.getAllBreakpoints().stream()
                                 .filter(x -> !x.isTemporary)
                                 .forEach(x -> bps.put(x.address, x));
-                            System.out.println("READ breakpoints:\n"+bps.values());
+                            System.out.println(threadName()+" - read breakpoints:\n"+bps.values());
                         }
                     });
-                    System.out.println("Rendering breakpoint text");
                     synchronized (lines)
                     {
                         synchronized (bps)
                         {
+                            System.out.println( threadName()+" - got "+bps.size()+" breakpoints");
                             int address = startAddress;
                             for (String line : lines)
                             {
@@ -518,18 +751,29 @@ public class MainFrame extends JFrame
             @Override
             public void invoke(EmulatorDriver controller)
             {
+                System.out.println( threadName()+" - invoke() called - disassembling");
                 synchronized(this.lines)
                 {
                     final Emulator interpreter = controller.emulator;
                     this.currentPC = interpreter.pc;
 
                     final int displayStart;
-                    if ( Math.abs( currentPC - startAddress ) > 7 ) {
-                        displayStart = Math.max(0,currentPC-8);
-                    } else {
+                    if ( userProvidedAddress )
+                    {
                         displayStart = startAddress;
                     }
-                    final List<String> lines = Disassembler.disAsm( interpreter.memory,displayStart,16 );
+                    else
+                    {
+                        if (Math.abs(currentPC - startAddress) > (WORDS_TO_DISASSEMBLE-1))
+                        {
+                            displayStart = Math.max(0, currentPC - WORDS_TO_DISASSEMBLE/2);
+                        }
+                        else
+                        {
+                            displayStart = startAddress;
+                        }
+                    }
+                    final List<String> lines = Disassembler.disAsm( interpreter.memory,displayStart,WORDS_TO_DISASSEMBLE );
 
                     this.startAddress = displayStart;
                     this.lines.clear();
@@ -656,7 +900,6 @@ public class MainFrame extends JFrame
                                     final String text = source.getText();
                                     if ( text != null )
                                     {
-                                        System.out.println("Highlighting text");
                                         documentChangeListenerEnabled = false;
                                         final Parser p = new Parser(new Lexer(new Scanner(text)));
                                         final ASTNode ast;
@@ -950,5 +1193,49 @@ public class MainFrame extends JFrame
         Configuration.saveWindowState(config, ConfigKey.MAINFRAME, MainFrame.this);
         configProvider.save();
         dispose();
+    }
+
+    private static String threadName() {
+        return Thread.currentThread().getName();
+    }
+
+    private Integer evaluate(String expression)
+    {
+        // TODO: Implement expression parsing in parser and use this to evaluate an expression
+        try
+        {
+            if (StringUtils.isNotBlank(expression))
+            {
+                if ( "pc".equalsIgnoreCase( expression ) )
+                {
+                    return driver.runOnThreadWithResult(ip -> ip.emulator.pc);
+                }
+                if (expression.startsWith("0x") || expression.startsWith("0X"))
+                {
+                    return Integer.parseInt(expression.trim().substring(2), 16);
+                }
+                if (expression.startsWith("%"))
+                {
+                    return Integer.parseInt(expression.trim().substring(1), 2);
+                }
+                if ( expression.length() >= 2 )
+                {
+                    final int regNum;
+                    try {
+                        regNum = RegisterNode.parseRegisterNum(expression );
+                        return driver.runOnThreadWithResult(ip -> ip.emulator.register[regNum] );
+                    }
+                    catch(IllegalArgumentException e) {
+                        // ok, not a Vx register
+                    }
+                }
+                return Integer.parseInt(expression.trim());
+            }
+        }
+        catch(Exception e)
+        {
+            e.printStackTrace();
+        }
+        return null;
     }
 }

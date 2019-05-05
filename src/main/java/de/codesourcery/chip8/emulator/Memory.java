@@ -61,6 +61,23 @@ public class Memory
     }
 
     /**
+     * Copies a given number of bytes starting at a specific address to a byte array.
+     *
+     * @param address
+     * @param count
+     * @param destination
+     */
+    public void read(int address,int count,byte[] destination) {
+
+        int adr = address % this.data.length;
+        for ( int i = 0, writePtr = 0 ; i < count ; i++ )
+        {
+            destination[writePtr++] = this.data[adr];
+            adr = (adr+1) % this.data.length;
+        }
+    }
+
+    /**
      * Bulk-load memory from a file on the classpath.
      *
      * @param classpath

@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -53,6 +54,12 @@ public class EmulatorDriver
     public interface IDriverCallback
     {
         void invoke(EmulatorDriver controller);
+    }
+
+    @FunctionalInterface
+    public interface IDriverCallbackWithValue<T>
+    {
+        T invoke(EmulatorDriver controller);
     }
 
     /**
@@ -200,7 +207,6 @@ public class EmulatorDriver
             boolean running = false;
             boolean ignoreBreakpoint = false;
             boolean isStepping = false;
-            boolean hasEnabledBreakpoints = false;
 
             while( true)
             {
@@ -218,11 +224,11 @@ public class EmulatorDriver
                                 cmd.onReceive(this);
                             }
                             shutdownListeners.forEach(x -> { try { x.run(); } catch(Exception e) {
-                             e.printStackTrace();
+                                e.printStackTrace();
                             }} );
                             return; /* stop thread */
                         case CHANGE_BREAKPOINTS:
-                            hasEnabledBreakpoints = enabledBreakpoints.isNotEmpty();
+                            // hasEnabledBreakpoints = enabledBreakpoints.isNotEmpty();
                         case RUN:
                             continue;
                         case RESET:
@@ -231,7 +237,7 @@ public class EmulatorDriver
                             disabledBreakpoints.clearTemporary();
                             emulator.reset();
                             cmdQueue.reset();
-                            hasEnabledBreakpoints = enabledBreakpoints.isNotEmpty();
+                            // hasEnabledBreakpoints = enabledBreakpoints.isNotEmpty();
                             continue;
                         case STEP:
                             isStepping = true;
@@ -259,8 +265,7 @@ public class EmulatorDriver
                     }
                 }
 
-                if ( hasEnabledBreakpoints &&
-                     ! ignoreBreakpoint && enabledBreakpoints.checkBreakpointHit(emulator.pc ) )
+                if ( ! ignoreBreakpoint && enabledBreakpoints.checkBreakpointHit(emulator.pc ) )
                 {
                     running = setRunning( running, false , Reason.STOPPED_BREAKPOINT);
                     continue;
@@ -421,7 +426,7 @@ public class EmulatorDriver
      */
     public void stepOver()
     {
-        runOnThread(driver -> addBreakpoint(new Breakpoint( driver.emulator.pc+2, true),true));
+        runOnThread(driver -> addBreakpoint(new Breakpoint(driver.emulator.pc + 2, true), true));
         start();
     }
 
@@ -465,10 +470,7 @@ public class EmulatorDriver
         Validate.notNull(callback, "callback must not be null");
         if ( Thread.currentThread() == thread )
         {
-            // hint: can't just call IDriverCallback#invoke() directly
-            // as the cmd queue processing has some side-effects (changes to local variables)
-            // that we can't emulate here
-            thread.submit( new Cmd( type, thread -> callback.invoke(this) ) );
+            callback.invoke(this);
         }
         else
         {
@@ -490,6 +492,34 @@ public class EmulatorDriver
                 /* can't help it */
             }
         }
+    }
+
+    public <T> T runOnThreadWithResult(IDriverCallbackWithValue<T> callback)
+    {
+        Validate.notNull(callback, "callback must not be null");
+        if ( Thread.currentThread() == thread )
+        {
+            return callback.invoke(this);
+        }
+        final AtomicReference<T> result = new AtomicReference<>();
+        final CountDownLatch latch = new CountDownLatch(1);
+        thread.submit( new Cmd( CmdType.RUN, thread ->
+        {
+            try
+            {
+                result.set( callback.invoke(this) );
+            } finally {
+                latch.countDown();
+            }
+        }));
+        try
+        {
+            latch.await();
+        }
+        catch(InterruptedException e) {
+            /* can't help it */
+        }
+        return result.get();
     }
 
     private void execute(CmdType type)
@@ -554,7 +584,8 @@ public class EmulatorDriver
     {
         final List<Breakpoint> list = new ArrayList<>();
 
-        runOnThread( ip -> {
+        runOnThread( ip ->
+        {
             synchronized(list)
             {
                 enabledBreakpoints.getAll( list );
@@ -615,6 +646,7 @@ public class EmulatorDriver
                 enabledBreakpoints.add(bp);
             }
         }, CmdType.CHANGE_BREAKPOINTS);
+        System.out.println( Thread.currentThread().getName()+" - toggle() returns");
     }
 
     /**

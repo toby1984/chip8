@@ -51,12 +51,13 @@ public final class Breakpoints
 
     public void add(Breakpoint bp) {
 
-        System.out.println("Adding breakpoint "+bp+" to "+this);
+        System.out.println("About top add breakpoint "+bp+" to "+this);
         final Breakpoint existing = getMap( bp.address, bp.isTemporary )
                 .put( bp.address, bp );
         if ( existing == null ) {
             size++;
         }
+        System.out.println("Added breakpoint "+bp+" to "+this);
     }
 
     public void remove(Breakpoint bp)
