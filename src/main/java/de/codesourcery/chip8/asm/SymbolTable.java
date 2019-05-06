@@ -35,7 +35,14 @@ public class SymbolTable
      */
     public static final class Symbol
     {
+        public enum Type {
+            LABEL,
+            EQU,
+            REGISTER_ALIAS
+        }
+
         public final Identifier name;
+        public Type type;
         public Object value;
 
         public Symbol(Identifier name)
@@ -43,14 +50,16 @@ public class SymbolTable
             this.name = name;
         }
 
-        public Symbol(Identifier name,Object value)
+        public Symbol(Identifier name,Symbol.Type type,Object value)
         {
             this.name = name;
+            this.type = type;
             this.value = value;
         }
 
-        public boolean isDefined() {
-            return value != null;
+        public boolean isDefined()
+        {
+            return type != null && value != null;
         }
     }
 
@@ -65,11 +74,20 @@ public class SymbolTable
      * Declares a symbol.
      * @param identifier symbol name
      */
-    public void declare(Identifier identifier)
+    public void declare(Identifier identifier) {
+        declare(identifier,null);
+    }
+
+    /**
+     * Declares a symbol.
+     * @param identifier symbol name
+     * @param type symbol type (may be NULL)
+     */
+    public void declare(Identifier identifier,Symbol.Type type)
     {
         Validate.notNull(identifier, "identifier must not be null");
         if ( ! symbols.containsKey( identifier ) ) {
-            symbols.put( identifier, new Symbol(identifier ) );
+            symbols.put( identifier, new Symbol(identifier,type,null) );
         }
     }
 
@@ -79,20 +97,44 @@ public class SymbolTable
      * @param identifier symbol name
      * @param value symbol value (must not be NULL).
      */
-    public void define(Identifier identifier, Object value)
+    public void define(Identifier identifier, Symbol.Type type, Object value)
     {
         Validate.notNull(identifier, "identifier must not be null");
+        Validate.notNull( type, "type must not be null" );
         Validate.notNull( value, "value must not be null" );
 
         Symbol existing = get( identifier );
         if ( existing == null ) {
-            existing = new Symbol(identifier,value);
+            existing = new Symbol(identifier,type,value);
             symbols.put( identifier, existing );
             return;
         }
         if ( existing.value != null ) {
             throw new IllegalStateException( "Symbol "+existing+" is already declared" );
         }
+        if ( existing.type != null && existing.type != type ) {
+            throw new IllegalArgumentException("Refusing to redefine symbol "+existing+" with different type "+type);
+        }
+        existing.type = type;
+        existing.value = value;
+    }
+
+    public void redefine(Identifier identifier, Symbol.Type type, Object value)
+    {
+        Validate.notNull(identifier, "identifier must not be null");
+        Validate.notNull( type, "type must not be null" );
+        Validate.notNull( value, "value must not be null" );
+
+        Symbol existing = get( identifier );
+        if ( existing == null ) {
+            existing = new Symbol(identifier,type,value);
+            symbols.put( identifier, existing );
+            return;
+        }
+        if ( existing.type != null && existing.type != type ) {
+            throw new IllegalArgumentException("Refusing to redefine symbol "+existing+" with different type "+type);
+        }
+        existing.type = type;
         existing.value = value;
     }
 

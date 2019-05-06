@@ -2,6 +2,7 @@ package de.codesourcery.chip8.asm;
 
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.ExpressionNode;
+import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.NumberNode;
 import de.codesourcery.chip8.asm.ast.OperatorNode;
 import de.codesourcery.chip8.asm.ast.TextNode;
@@ -19,7 +20,10 @@ public class ExpressionEvaluator
 {
     public static boolean isValueNode(ASTNode node, Assembler.CompilationContext context)
     {
-        return node instanceof NumberNode || node instanceof ExpressionNode || node instanceof OperatorNode || (node instanceof TextNode && refersToLabel( (TextNode) node, context ) );
+        return node instanceof NumberNode ||
+                node instanceof IdentifierNode ||
+                node instanceof ExpressionNode ||
+                node instanceof OperatorNode;
     }
 
     public static Object evaluate(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
@@ -51,10 +55,9 @@ public class ExpressionEvaluator
             }
             return doEvaluate( node.child(0), context, failOnErrors );
         }
-        if ( node instanceof TextNode)
+        if ( node instanceof IdentifierNode )
         {
-            final String name = ((TextNode) node).value;
-            final Identifier id = Identifier.of( name );
+            final Identifier id = ((IdentifierNode) node).identifier;
             if ( context.symbolTable.isDeclared( id ) )
             {
                 final SymbolTable.Symbol symbol = context.symbolTable.get( id );
@@ -62,20 +65,15 @@ public class ExpressionEvaluator
                     return symbol.value;
                 }
                 if ( failOnErrors ) {
-                    throw new RuntimeException("Symbol '"+name+"' @ "+node+" is declared but not defined (=no value available yet)");
+                    throw new RuntimeException("Symbol '"+id.value+"' @ "+node+" is declared but not defined (=no value available yet)");
                 }
             }
             else if ( failOnErrors )
             {
-                throw new RuntimeException( "Unknown symbol '" + name + "' @ " + node );
+                throw new RuntimeException( "Unknown symbol '" + id.value + "' @ " + node );
             }
             return null;
         }
         throw new RuntimeException("Internal error, don't know how to evaluate "+node);
-    }
-
-    public static boolean refersToLabel(TextNode node, Assembler.CompilationContext context)
-    {
-        return Identifier.isValid( node.value ) && context.symbolTable.isDeclared( Identifier.of( node.value ) );
     }
 }

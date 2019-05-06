@@ -59,12 +59,12 @@ public class LexerTest extends TestCase
         assertEquals( "Got "+tokens.stream().map(x->x.toString())
                              .collect( Collectors.joining("\n" ) ),7,tokens.size());
 
-        assertEquals(TokenType.TEXT, tokens.get(0).type );
+        assertEquals(TokenType.IDENTIFIER, tokens.get(0).type );
         assertEquals(TokenType.COLON, tokens.get(1).type );
         assertEquals(TokenType.TEXT, tokens.get(2).type );
         assertEquals(TokenType.HEX_NUMBER, tokens.get(3).type );
         assertEquals(TokenType.SEMICOLON, tokens.get(4).type );
-        assertEquals(TokenType.TEXT, tokens.get(5).type );
+        assertEquals(TokenType.IDENTIFIER, tokens.get(5).type );
         assertEquals(TokenType.EOF, tokens.get(6).type );
     }
 

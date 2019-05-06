@@ -15,6 +15,8 @@
  */
 package de.codesourcery.chip8.asm.parser;
 
+import de.codesourcery.chip8.asm.Identifier;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -111,6 +113,16 @@ public final class Lexer
                     scanner.next();
                     tokens.add( new Token( TokenType.OPERATOR, c, scanner.offset() ) );
                     return;
+                case '=':
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.EQUALS, c, scanner.offset() ) );
+                    return;
+                case '.':
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.DOT, c, scanner.offset() ) );
+                    return;
                 case '(':
                     parseBuffer(startOffset);
                     scanner.next();
@@ -184,6 +196,11 @@ public final class Lexer
         if ( m.matches() )
         {
             tokens.add( new Token( TokenType.BINARY_NUMBER,s,startOffset) );
+            return;
+        }
+
+        if ( Identifier.isValid( s ) && ! Identifier.isReserved( s ) ) {
+            tokens.add( new Token( TokenType.IDENTIFIER,s,startOffset) );
             return;
         }
         tokens.add( new Token( TokenType.TEXT,s,startOffset) );

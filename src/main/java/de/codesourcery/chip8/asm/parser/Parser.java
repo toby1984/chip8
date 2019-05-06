@@ -22,7 +22,9 @@ import de.codesourcery.chip8.asm.Operator;
 import de.codesourcery.chip8.asm.SymbolTable;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.CommentNode;
+import de.codesourcery.chip8.asm.ast.DirectiveNode;
 import de.codesourcery.chip8.asm.ast.ExpressionNode;
+import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
 import de.codesourcery.chip8.asm.ast.NumberNode;
@@ -32,6 +34,7 @@ import de.codesourcery.chip8.asm.ast.TextNode;
 import de.codesourcery.chip8.asm.ast.TextRegion;
 import org.apache.commons.lang3.StringUtils;
 
+import javax.swing.plaf.synth.Region;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -213,6 +216,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             case REGISTER:
                 final int regNum = Integer.parseInt( lexer.next().value.substring( 1 ) );
                 return new RegisterNode( regNum, tok.region() );
+            case IDENTIFIER:
+                return new IdentifierNode( Identifier.of( lexer.next().value ), tok.region() );
             case TEXT:
                 return new TextNode( lexer.next().value, tok.region() );
             default:
@@ -238,10 +243,10 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
     private ASTNode parseLabel()
     {
-        if ( lexer.peek().is(TokenType.TEXT ) )
+        if ( lexer.peek().is(TokenType.IDENTIFIER ) )
         {
             Token tok = lexer.next();
-            if ( Identifier.isValid( tok.value) && lexer.peek().is(TokenType.COLON ) )
+            if ( lexer.peek().is(TokenType.COLON ) )
             {
                 lexer.next();
                 return new LabelNode( new Identifier( tok.value ) , tok.region() );
@@ -253,7 +258,12 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
     private ASTNode parseInstruction()
     {
+        ASTNode result = parseDirective();
+        if ( result != null ) {
+            return result;
+        }
         final Token tok = lexer.peek();
+
         if ( tok.is(TokenType.TEXT) ) {
             Instruction match= Stream.of( Instruction.values() ).filter(  x->x.mnemonic.equalsIgnoreCase( tok.value) ).findFirst().orElse( null );
             if ( match != null )
@@ -276,6 +286,81 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 }
                 return insn;
             }
+        }
+        return null;
+    }
+
+    private ASTNode parseDirective()
+    {
+        if ( lexer.peek().is( TokenType.DOT ) )
+        {
+            final Token dot = lexer.next();
+            if ( ! lexer.peek().is(TokenType.TEXT) ) {
+                throw new RuntimeException("Expected a directive @ "+lexer.peek());
+            }
+            final Token directiveTok = lexer.next();
+            TextRegion directiveRegion = directiveTok.region();
+            directiveRegion.merge( dot.region() );
+
+            final DirectiveNode result;
+            switch( directiveTok.value )
+            {
+                case "alias": // .alias v0 = x
+                    if ( ! lexer.peek().is( TokenType.REGISTER ) ) {
+                        throw new RuntimeException("Expected a register name (v0...v15) but got "+lexer.peek());
+                    }
+                    result = new DirectiveNode( DirectiveNode.Type.ALIAS, directiveRegion );
+                    final Token registerToken = lexer.next();
+                    final int regNum = Integer.parseInt( registerToken.value.substring( 1 ) );
+                    result.add( new RegisterNode( regNum , registerToken.region() ) );
+                    if ( ! lexer.peek().is(TokenType.EQUALS) ) {
+                        throw new RuntimeException("Expected an '=' character but got "+lexer.peek());
+                    }
+                    lexer.next(); // consume '='
+
+                    ASTNode value = parseIdentifier();
+                    if ( value == null ) {
+                        throw new RuntimeException("Expected an identifier but got "+lexer.peek());
+                    }
+                    result.add( value );
+                    return result;
+                case "equ": // .equ a = b
+                    if ( ! Identifier.isValid( lexer.peek().value ) ) {
+                        throw new RuntimeException("Expected an identifier but got "+lexer.peek());
+                    }
+                    result = new DirectiveNode( DirectiveNode.Type.EQU, directiveRegion );
+
+                    ASTNode identifier = parseIdentifier();
+                    if ( identifier == null ) {
+                        throw new RuntimeException("Expected an identifier but got "+lexer.peek());
+                    }
+                    result.add( identifier );
+                    if ( ! lexer.peek().is(TokenType.EQUALS) ) {
+                        throw new RuntimeException("Expected an '=' character but got "+lexer.peek());
+                    }
+                    lexer.next(); // consume '='
+
+                    value = parseExpression();
+                    if ( value == null ) {
+                        throw new RuntimeException("Expected an expression but got "+lexer.peek());
+                    }
+                    result.add( value );
+                    return result;
+            }
+            throw new RuntimeException("Unrecognized directive @ "+directiveTok);
+        }
+        return null;
+    }
+
+    private IdentifierNode parseIdentifier()
+    {
+        final Token tok = lexer.peek();
+        if ( tok.is( TokenType.IDENTIFIER ) ) {
+            lexer.next();
+            if (Identifier.isReserved( tok.value ) ) {
+                throw new RuntimeException("'"+tok.value+"' is a reserved identifier and cannot be used here : "+tok);
+            }
+            return new IdentifierNode( Identifier.of( tok.value ), tok.region() );
         }
         return null;
     }
@@ -323,31 +408,36 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
         public boolean matches(ASTNode node, Assembler.CompilationContext context)
         {
+            if ( node instanceof IdentifierNode) {
+
+                final Identifier id = ((IdentifierNode) node).identifier;
+                final SymbolTable.Symbol symbol = context.symbolTable.get( id );
+                if ( symbol != null )
+                {
+                    Object value = symbol.value;
+                    switch( symbol.type ) {
+
+                        case LABEL:
+                        case EQU:
+                            if ( value instanceof Number) {
+                                return checkNumberInRange( ((Number) value).intValue() );
+                            }
+                            return this == ADDRESS;
+                        case REGISTER_ALIAS:
+                            if ( Integer.valueOf(0).equals( symbol.value ) )
+                            {
+                                return this == REGISTER_V0 || this == REGISTER;
+                            }
+                            return this == REGISTER;
+                    }
+                }
+                return false;
+            }
             if ( node instanceof TextNode )
             {
                 // first, check if this is a register alias
                 final String text = ((TextNode) node).value;
-                if ( Identifier.isValid( text ) )
-                {
-                    final Integer regNum = context.getRegisterAlias( text );
-                    if ( regNum != null )
-                    {
-                        if ( this == REGISTER_V0 )
-                        {
-                            return regNum == 0;
-                        }
-                        return this == REGISTER;
-                    }
-                    if ( this != ADDRESS ) {
-                        return false;
-                    }
-                    // check if this is a resolvable symbol
-                    final Identifier id = Identifier.of( text );
-                    final SymbolTable.Symbol symbol = context.symbolTable.get( id );
-                    return symbol != null;
-                }
-
-                switch( ((TextNode) node).value.toLowerCase() ) {
+                switch( text.toLowerCase() ) {
                     case "k":
                         return this == PRESSED_KEY;
                     case "i":
@@ -379,16 +469,23 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 if ( value instanceof Number)
                 {
                     int v = ((Number) value).intValue();
-                    if ( this == NIBBLE ) {
-                        return v >= 0 && v <= 15;
-                    }
-                    if ( this == BYTE) {
-                        return v >= 0 && v <= 255;
-                    }
-                    if ( this == ADDRESS) {
-                        return v >= 0 && v <= 0xfff;
+                    if ( checkNumberInRange( v ) ) {
+                        return true;
                     }
                 }
+            }
+            return false;
+        }
+
+        private boolean checkNumberInRange(int v) {
+            if ( this == NIBBLE ) {
+                return v >= 0 && v <= 15;
+            }
+            if ( this == BYTE) {
+                return v >= 0 && v <= 255;
+            }
+            if ( this == ADDRESS) {
+                return v >= 0 && v <= 0xfff;
             }
             return false;
         }
@@ -411,13 +508,13 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             }
         },
         JP("jp",OperandType.ADDRESS)
-        {
-            @Override
-            public void compile(InstructionNode instruction, Assembler.CompilationContext context)
-            {
-                context.writeWord( this, 0x1000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) ) );
-            }
-        },
+                {
+                    @Override
+                    public void compile(InstructionNode instruction, Assembler.CompilationContext context)
+                    {
+                        context.writeWord( this, 0x1000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) ) );
+                    }
+                },
         CALL("call",OperandType.ADDRESS) {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
@@ -714,10 +811,10 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             }
         };
 
-        private final String mnemonic;
-        private final OperandType operand0;
-        private final OperandType operand1;
-        private final OperandType operand2;
+        public final String mnemonic;
+        public final OperandType operand0;
+        public final OperandType operand1;
+        public final OperandType operand2;
 
         private Instruction(String mnemonic)
         {
@@ -763,7 +860,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
         public static Instruction findMatch(InstructionNode insn, Assembler.CompilationContext context)
         {
             final List<Instruction> candidates =
-            Stream.of( values() ).filter( x -> matchesOperandTypes( insn, x, context ) ).collect( Collectors.toList() );
+                    Stream.of( values() ).filter( x -> matchesOperandTypes( insn, x, context ) ).collect( Collectors.toList() );
             switch ( candidates.size() ) {
                 case 0 :
                     return null;
@@ -863,7 +960,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 int regionStart = Math.max( lineStartOffset, offset-10);
                 int regionEnd = Math.min( lineEnd, offset+10);
                 final String errLine =
-                line.substring( regionStart-lineStartOffset, regionEnd-lineStartOffset );
+                        line.substring( regionStart-lineStartOffset, regionEnd-lineStartOffset );
                 final int col = offset - lineStartOffset;
                 System.err.println( "Error at line "+lineNo+", column "+col);
                 System.err.println( errLine );

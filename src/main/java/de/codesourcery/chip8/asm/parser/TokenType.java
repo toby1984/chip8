@@ -22,6 +22,8 @@ package de.codesourcery.chip8.asm.parser;
 public enum TokenType
 {
     TEXT, // anything that's not one of the other tokens
+    IDENTIFIER,
+    EQUALS, // '='
     // numbers
     PARENS_OPEN, // (
     PARENS_CLOSE, // )
@@ -30,6 +32,7 @@ public enum TokenType
     BINARY_NUMBER, // %1010110
     // v<NUMBER>
     REGISTER,
+    DOT, // '.'
     COMMA, // ','
     COLON, // ':'
     WHITESPACE, // tab or space

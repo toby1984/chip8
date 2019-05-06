@@ -16,8 +16,11 @@
 package de.codesourcery.chip8.asm;
 
 import de.codesourcery.chip8.asm.ast.ASTNode;
+import de.codesourcery.chip8.asm.ast.DirectiveNode;
+import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
+import de.codesourcery.chip8.asm.ast.RegisterNode;
 import de.codesourcery.chip8.asm.parser.Lexer;
 import de.codesourcery.chip8.asm.parser.Parser;
 import de.codesourcery.chip8.asm.parser.Scanner;
@@ -45,7 +48,6 @@ public class Assembler
     public static final class CompilationContext
     {
         public final SymbolTable symbolTable = new SymbolTable();
-        private final Map<Identifier,Integer> registerAliases = new HashMap<>();
 
         final OutputStream executable;
         int currentAddress;
@@ -57,18 +59,6 @@ public class Assembler
 
         private String hex(int value) {
             return StringUtils.leftPad(Integer.toHexString( value),4,'0' );
-        }
-
-        public Integer getRegisterAlias(String identifier)
-        {
-            Validate.notNull( identifier, "alias must not be null" );
-            return registerAliases.get(Identifier.of( identifier.toLowerCase() ) );
-        }
-
-        public void setRegisterAlias(String alias,int registerNumber)
-        {
-            Validate.notNull( alias, "alias must not be null" );
-            registerAliases.put( Identifier.of( alias.toLowerCase() ), registerNumber );
         }
 
         public void writeWord(Parser.Instruction insn, int word) {
@@ -95,9 +85,23 @@ public class Assembler
         // assign addresses to labels
         ast.visitInOrder( (node,depth) ->
         {
-            if ( node instanceof LabelNode )
+            if ( node instanceof DirectiveNode )
             {
-                compilationContext.symbolTable.define( ((LabelNode) node).id , compilationContext.currentAddress );
+                if ( ((DirectiveNode) node).type == DirectiveNode.Type.EQU )
+                {
+                    final IdentifierNode identifierNode = (IdentifierNode) node.child( 0 );
+                    final Object value = ExpressionEvaluator.evaluate( node.child( 1 ), compilationContext, true );
+                    compilationContext.symbolTable.define( identifierNode.identifier, SymbolTable.Symbol.Type.EQU, value );
+                }
+                else if ( ((DirectiveNode) node).type == DirectiveNode.Type.ALIAS ) {
+                    final RegisterNode regNode = (RegisterNode) node.child( 0 );
+                    final IdentifierNode idNode = (IdentifierNode) node.child( 1 );
+                    compilationContext.symbolTable.redefine( idNode.identifier, SymbolTable.Symbol.Type.REGISTER_ALIAS, regNode.regNum );
+                }
+            }
+            else if ( node instanceof LabelNode )
+            {
+                compilationContext.symbolTable.define( ((LabelNode) node).id , SymbolTable.Symbol.Type.LABEL, compilationContext.currentAddress );
             }
             else if ( node instanceof InstructionNode )
             {
@@ -109,9 +113,21 @@ public class Assembler
         compilationContext.currentAddress = startAddress;
         ast.visitInOrder( (node,depth) ->
         {
+            if ( node instanceof DirectiveNode)
+            {
+                if ( ((DirectiveNode) node).type == DirectiveNode.Type.ALIAS )
+                {
+                    final RegisterNode regNode = (RegisterNode) node.child( 0 );
+                    final IdentifierNode idNode = (IdentifierNode) node.child( 1 );
+                    compilationContext.symbolTable.redefine( idNode.identifier, SymbolTable.Symbol.Type.REGISTER_ALIAS, regNode.regNum );
+                }
+            }
             if ( node instanceof InstructionNode)
             {
                 final Parser.Instruction instruction = ((InstructionNode) node).getInstruction(compilationContext);
+                if ( instruction == null ) {
+                    throw new RuntimeException("Invalid instruction @ "+node);
+                }
                 instruction.compile( (InstructionNode) node,compilationContext);
             }
         });

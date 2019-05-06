@@ -16,6 +16,10 @@
 package de.codesourcery.chip8.asm;
 
 import de.codesourcery.chip8.asm.ast.ASTNode;
+import de.codesourcery.chip8.asm.ast.DirectiveNode;
+import de.codesourcery.chip8.asm.ast.IdentifierNode;
+import de.codesourcery.chip8.asm.ast.NumberNode;
+import de.codesourcery.chip8.asm.ast.RegisterNode;
 import de.codesourcery.chip8.asm.parser.Lexer;
 import de.codesourcery.chip8.asm.parser.Parser;
 import de.codesourcery.chip8.asm.parser.Scanner;
@@ -24,6 +28,38 @@ import org.apache.commons.lang3.StringUtils;
 
 public class ParserTest extends TestCase
 {
+    public void testEqu()
+    {
+        ASTNode ast = parse( ".equ a = 1 ; test comment");
+        ast.visitInOrder( (node,depth) -> System.out.println( StringUtils.repeat(' ', depth)+" " +node ));
+
+        assertTrue( ast.child(0).child(0) instanceof DirectiveNode );
+
+        final DirectiveNode dir = (DirectiveNode) ast.child(0).child(0);
+
+        assertEquals( DirectiveNode.Type.EQU, dir.type );
+        assertEquals( Identifier.of("a") , ((IdentifierNode) dir.child(0)).identifier );
+
+        assertTrue( dir.child(1) instanceof NumberNode );
+        assertEquals( 1 , ((NumberNode) dir.child(1)).value );
+    }
+
+    public void testAlias()
+    {
+        ASTNode ast = parse( ".alias v1 = x ; test comment");
+        ast.visitInOrder( (node,depth) -> System.out.println( StringUtils.repeat(' ', depth)+" " +node ));
+
+        assertTrue( ast.child(0).child(0) instanceof DirectiveNode );
+
+        final DirectiveNode dir = (DirectiveNode) ast.child(0).child(0);
+
+        assertEquals( DirectiveNode.Type.ALIAS, dir.type );
+        assertEquals( 1 , ((RegisterNode) dir.child(0)).regNum );
+
+        assertTrue( dir.child(1) instanceof IdentifierNode );
+        assertEquals( Identifier.of("x") , ((IdentifierNode) dir.child(1)).identifier );
+    }
+
     public void testSimpleStatement()
     {
         ASTNode ast = parse( "label: add v0,v1 ; comment");
@@ -33,12 +69,6 @@ public class ParserTest extends TestCase
     public void testStatementWithExpression()
     {
         ASTNode ast = parse( "label: ld v0, 2*(3+-1) ; comment");
-        ast.visitInOrder( (node,depth) -> System.out.println( StringUtils.repeat(' ', depth)+" " +node ));
-    }
-
-    public void testAlias()
-    {
-        ASTNode ast = parse( ".alias x = v0");
         ast.visitInOrder( (node,depth) -> System.out.println( StringUtils.repeat(' ', depth)+" " +node ));
     }
 

@@ -15,6 +15,10 @@
  */
 package de.codesourcery.chip8.asm;
 
+import de.codesourcery.chip8.asm.parser.Parser;
+
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -26,6 +30,24 @@ public class Identifier
 {
     // valid identifiers look like this
     private static final Pattern ID = Pattern.compile("[_a-zA-Z]+[_0-9a-zA-Z]*");
+
+    private static final Set<String> RESERVED = new HashSet<>();
+
+    static {
+        RESERVED.add("i");
+        RESERVED.add("dt");
+        RESERVED.add("st");
+        RESERVED.add("f");
+        RESERVED.add("b");
+        RESERVED.add("origin");
+        RESERVED.add("equ");
+        RESERVED.add("alias");
+        RESERVED.add("pc");
+        RESERVED.add("[i]");
+        for ( Parser.Instruction insn : Parser.Instruction.values() ) {
+            RESERVED.add( insn.mnemonic.toLowerCase() );
+        }
+    }
 
     public final String value;
 
@@ -43,13 +65,14 @@ public class Identifier
 
     public static boolean isValid(String value)
     {
-        return value != null && ID.matcher( value ).matches();
+        return value != null &&
+               ID.matcher( value ).matches() &&
+               ! isReserved( value );
     }
 
-    @Override
-    public String toString()
+    public static boolean isReserved(String s)
     {
-        return value;
+        return RESERVED.contains( s.toLowerCase() );
     }
 
     @Override
@@ -66,5 +89,11 @@ public class Identifier
     public int hashCode()
     {
         return value.hashCode();
+    }
+
+    @Override
+    public String toString()
+    {
+        return value;
     }
 }
