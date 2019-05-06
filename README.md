@@ -11,7 +11,7 @@ Maven 3.x, JDK 11+
     mvn clean package
     java -jar target/chip8.jar
 
-![Screenshot](https://raw.githubusercontent.com/toby1984/chip8/master/screenshot2.png)
+![Screenshot](https://raw.githubusercontent.com/toby1984/chip8/master/screenshot.png)
 
 # Features
 
