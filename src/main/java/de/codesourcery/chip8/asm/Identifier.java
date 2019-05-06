@@ -37,6 +37,10 @@ public class Identifier
         this.value = value;
     }
 
+    public static Identifier of(String s) {
+        return new Identifier(s);
+    }
+
     public static boolean isValid(String value)
     {
         return value != null && ID.matcher( value ).matches();

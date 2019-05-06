@@ -30,6 +30,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Crude CHIP-8 assembler.
@@ -43,6 +45,8 @@ public class Assembler
     public static final class CompilationContext
     {
         public final SymbolTable symbolTable = new SymbolTable();
+        private final Map<Identifier,Integer> registerAliases = new HashMap<>();
+
         final OutputStream executable;
         int currentAddress;
 
@@ -53,6 +57,18 @@ public class Assembler
 
         private String hex(int value) {
             return StringUtils.leftPad(Integer.toHexString( value),4,'0' );
+        }
+
+        public Integer getRegisterAlias(String identifier)
+        {
+            Validate.notNull( identifier, "alias must not be null" );
+            return registerAliases.get(Identifier.of( identifier.toLowerCase() ) );
+        }
+
+        public void setRegisterAlias(String alias,int registerNumber)
+        {
+            Validate.notNull( alias, "alias must not be null" );
+            registerAliases.put( Identifier.of( alias.toLowerCase() ), registerNumber );
         }
 
         public void writeWord(Parser.Instruction insn, int word) {
@@ -95,7 +111,7 @@ public class Assembler
         {
             if ( node instanceof InstructionNode)
             {
-                final Parser.Instruction instruction = ((InstructionNode) node).getInstruction();
+                final Parser.Instruction instruction = ((InstructionNode) node).getInstruction(compilationContext);
                 instruction.compile( (InstructionNode) node,compilationContext);
             }
         });

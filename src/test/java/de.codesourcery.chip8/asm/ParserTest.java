@@ -24,9 +24,21 @@ import org.apache.commons.lang3.StringUtils;
 
 public class ParserTest extends TestCase
 {
-    public void test()
+    public void testSimpleStatement()
     {
         ASTNode ast = parse( "label: add v0,v1 ; comment");
+        ast.visitInOrder( (node,depth) -> System.out.println( StringUtils.repeat(' ', depth)+" " +node ));
+    }
+
+    public void testStatementWithExpression()
+    {
+        ASTNode ast = parse( "label: ld v0, 2*(3+-1) ; comment");
+        ast.visitInOrder( (node,depth) -> System.out.println( StringUtils.repeat(' ', depth)+" " +node ));
+    }
+
+    public void testAlias()
+    {
+        ASTNode ast = parse( ".alias x = v0");
         ast.visitInOrder( (node,depth) -> System.out.println( StringUtils.repeat(' ', depth)+" " +node ));
     }
 

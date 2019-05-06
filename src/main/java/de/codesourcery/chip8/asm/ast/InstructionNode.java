@@ -15,6 +15,7 @@
  */
 package de.codesourcery.chip8.asm.ast;
 
+import de.codesourcery.chip8.asm.Assembler;
 import de.codesourcery.chip8.asm.parser.Parser;
 
 /**
@@ -32,9 +33,9 @@ public class InstructionNode extends ASTNode
         this.mnemonic = mnemonic;
     }
 
-    public Parser.Instruction getInstruction()
+    public Parser.Instruction getInstruction(Assembler.CompilationContext context)
     {
-        return Parser.Instruction.findMatch( this );
+        return Parser.Instruction.findMatch( this, context);
     }
 
     @Override

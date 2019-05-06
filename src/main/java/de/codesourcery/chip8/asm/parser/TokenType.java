@@ -23,6 +23,8 @@ public enum TokenType
 {
     TEXT, // anything that's not one of the other tokens
     // numbers
+    PARENS_OPEN, // (
+    PARENS_CLOSE, // )
     HEX_NUMBER, // 0x1234
     DECIMAL_NUMBER, // 12345
     BINARY_NUMBER, // %1010110
@@ -33,5 +35,6 @@ public enum TokenType
     WHITESPACE, // tab or space
     NEWLINE, // 0x0a
     SEMICOLON, // ';'
+    OPERATOR, // + - * /
     EOF // end of input
 }

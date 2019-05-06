@@ -33,11 +33,23 @@ public class LexerTest extends TestCase
     {
         List<Token> tokens = lex("     \n\n\n    ");
         assertEquals( "Got "+tokens,
-            4,tokens.size());
+        4,tokens.size());
         assertEquals(TokenType.NEWLINE, tokens.get(0).type );
         assertEquals(TokenType.NEWLINE, tokens.get(1).type );
         assertEquals(TokenType.NEWLINE, tokens.get(2).type );
         assertEquals(TokenType.EOF, tokens.get(3).type );
+    }
+
+    public void testExpression()
+    {
+        List<Token> tokens = lex( "(1+2)*3" );
+        assertEquals(TokenType.PARENS_OPEN, tokens.get(0).type );
+        assertEquals(TokenType.DECIMAL_NUMBER, tokens.get(1).type );
+        assertEquals(TokenType.OPERATOR, tokens.get(2).type );
+        assertEquals(TokenType.DECIMAL_NUMBER, tokens.get(3).type );
+        assertEquals(TokenType.PARENS_CLOSE, tokens.get(4).type );
+        assertEquals(TokenType.OPERATOR, tokens.get(5).type );
+        assertEquals(TokenType.DECIMAL_NUMBER, tokens.get(6).type );
     }
 
     public void testInstruction()
@@ -45,7 +57,7 @@ public class LexerTest extends TestCase
         List<Token> tokens = lex("label: jp 0x123 ; comment");
 
         assertEquals( "Got "+tokens.stream().map(x->x.toString())
-                                 .collect( Collectors.joining("\n" ) ),7,tokens.size());
+                             .collect( Collectors.joining("\n" ) ),7,tokens.size());
 
         assertEquals(TokenType.TEXT, tokens.get(0).type );
         assertEquals(TokenType.COLON, tokens.get(1).type );

@@ -1083,6 +1083,7 @@ public class MainFrame extends JFrame
                 }
                 catch (Exception e)
                 {
+                    e.printStackTrace();
                     final StringWriter sWriter = new StringWriter();
                     e.printStackTrace(new PrintWriter( sWriter ));
                     msg( sWriter.toString() );

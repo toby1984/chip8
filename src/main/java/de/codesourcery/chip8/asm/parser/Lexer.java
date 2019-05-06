@@ -103,6 +103,24 @@ public final class Lexer
             }
             switch( c )
             {
+                case '+':
+                case '-':
+                case '*':
+                case '/':
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.OPERATOR, c, scanner.offset() ) );
+                    return;
+                case '(':
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.PARENS_OPEN, c, scanner.offset() ) );
+                    return;
+                case ')':
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.PARENS_CLOSE, c, scanner.offset() ) );
+                    return;
                 case '\n':
                     parseBuffer(startOffset);
                     scanner.next();

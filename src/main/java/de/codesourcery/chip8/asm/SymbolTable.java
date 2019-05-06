@@ -105,4 +105,14 @@ public class SymbolTable
     public Symbol get(Identifier identifier) {
         return symbols.get( identifier );
     }
+
+    /**
+     * Returns whether a given symbol has been declared or defined.
+     *
+     * @param identifier
+     * @return
+     */
+    public boolean isDeclared(Identifier identifier) {
+        return get(identifier) != null;
+    }
 }

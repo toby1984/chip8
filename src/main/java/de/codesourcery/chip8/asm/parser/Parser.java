@@ -16,13 +16,17 @@
 package de.codesourcery.chip8.asm.parser;
 
 import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.asm.ExpressionEvaluator;
 import de.codesourcery.chip8.asm.Identifier;
+import de.codesourcery.chip8.asm.Operator;
 import de.codesourcery.chip8.asm.SymbolTable;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.CommentNode;
+import de.codesourcery.chip8.asm.ast.ExpressionNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
 import de.codesourcery.chip8.asm.ast.NumberNode;
+import de.codesourcery.chip8.asm.ast.OperatorNode;
 import de.codesourcery.chip8.asm.ast.RegisterNode;
 import de.codesourcery.chip8.asm.ast.TextNode;
 import de.codesourcery.chip8.asm.ast.TextRegion;
@@ -101,51 +105,85 @@ public class Parser
         return statement;
     }
 
-    private ASTNode parseLabel()
+    public ASTNode parseExpression()
     {
-        if ( lexer.peek().is(TokenType.TEXT ) )
-        {
-            Token tok = lexer.next();
-            if ( Identifier.isValid( tok.value) && lexer.peek().is(TokenType.COLON ) )
-            {
-                lexer.next();
-                return new LabelNode( new Identifier( tok.value ) , tok.region() );
-            }
-            lexer.pushBack( tok );
-        }
-        return null;
+        return parseAddition();
     }
 
-    private ASTNode parseInstruction()
+    private ASTNode parseAddition()
     {
-        final Token tok = lexer.peek();
-        if ( tok.is(TokenType.TEXT) ) {
-            Instruction match= Stream.of( Instruction.values() ).filter(  x->x.mnemonic.equalsIgnoreCase( tok.value) ).findFirst().orElse( null );
-            if ( match != null )
+        final ASTNode operand0 = parseMultiplication();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
             {
-                lexer.next();
-                final InstructionNode insn = new InstructionNode( match.mnemonic, tok.region() );
-                ASTNode op = null;
-                boolean required = false;
-                while ( ( op = parseOperand() ) != null )
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.PLUS || op == Operator.MINUS )
                 {
-                    required = false;
-                    insn.add( op );
-                    if ( lexer.peek().is(TokenType.COMMA ) ) {
-                        lexer.next();
-                        required = true;
+                    tok = lexer.next();
+                    ASTNode operand1 = parseMultiplication();
+                    if ( operand1 == null ) {
+                        throw new RuntimeException("Expected an argument");
                     }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
                 }
-                if ( required ) {
-                    throw new RuntimeException("Expected operand after comma @ "+lexer.peek().offset);
-                }
-                if ( insn.getInstruction() == null ) {
-                    throw new RuntimeException("Unknown instruction @ "+tok.offset);
-                }
-                return insn;
             }
         }
-        return null;
+        return operand0;
+    }
+
+    /*
+expression     → addition;
+addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
+multiplication → unary ( ( "/" | "*" ) unary )* ;
+unary          → ( "-" ) unary | operand ;
+operand        → NUMBER | STRING | "false" | "true" | "nil"
+               | "(" expression ")" ;
+     */
+    private ASTNode parseMultiplication()
+    {
+        final ASTNode operand0 = parseUnary();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.MULTIPLY || op == Operator.DIVIDE )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseUnary();
+                    if ( operand1 == null ) {
+                        throw new RuntimeException("Expected an argument but got "+lexer.peek());
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
+    }
+
+    private ASTNode parseUnary()
+    {
+        if ( lexer.peek().is(TokenType.OPERATOR) && "-".equals( lexer.peek().value ) )
+        {
+            final Token tok = lexer.next();
+            OperatorNode op = new OperatorNode(Operator.UNARY_MINUS,tok.region());
+            final ASTNode operand = parseUnary();
+            if ( operand == null ) {
+                throw new RuntimeException("Expected an argument after unary minus @ "+lexer.peek());
+            }
+            op.add( operand );
+            return op;
+        }
+        return parseOperand();
     }
 
     private ASTNode parseOperand()
@@ -178,7 +216,66 @@ public class Parser
             case TEXT:
                 return new TextNode( lexer.next().value, tok.region() );
             default:
-                // not a valid operand
+        }
+        if ( lexer.peek().is(TokenType.PARENS_OPEN ) )
+        {
+            tok = lexer.next();
+            final ASTNode result = parseExpression();
+            if ( result == null ) {
+                throw new IllegalArgumentException( "Missing input after opening parentheses @ "+lexer.peek() );
+            }
+            if ( ! lexer.peek().is(TokenType.PARENS_CLOSE ) ) {
+                throw new IllegalArgumentException( "Missing closing parentheses @ "+lexer.peek() );
+            }
+            final TextRegion region = tok.region();
+            region.merge( lexer.next().region() );
+            final ExpressionNode expr = new ExpressionNode( region );
+            expr.add( result );
+            return expr;
+        }
+        return null;
+    }
+
+    private ASTNode parseLabel()
+    {
+        if ( lexer.peek().is(TokenType.TEXT ) )
+        {
+            Token tok = lexer.next();
+            if ( Identifier.isValid( tok.value) && lexer.peek().is(TokenType.COLON ) )
+            {
+                lexer.next();
+                return new LabelNode( new Identifier( tok.value ) , tok.region() );
+            }
+            lexer.pushBack( tok );
+        }
+        return null;
+    }
+
+    private ASTNode parseInstruction()
+    {
+        final Token tok = lexer.peek();
+        if ( tok.is(TokenType.TEXT) ) {
+            Instruction match= Stream.of( Instruction.values() ).filter(  x->x.mnemonic.equalsIgnoreCase( tok.value) ).findFirst().orElse( null );
+            if ( match != null )
+            {
+                lexer.next();
+                final InstructionNode insn = new InstructionNode( match.mnemonic, tok.region() );
+                ASTNode op = null;
+                boolean required = false;
+                while ( ( op = parseExpression() ) != null )
+                {
+                    required = false;
+                    insn.add( op );
+                    if ( lexer.peek().is(TokenType.COMMA ) ) {
+                        lexer.next();
+                        required = true;
+                    }
+                }
+                if ( required ) {
+                    throw new RuntimeException("Expected operand after comma @ "+lexer.peek().offset);
+                }
+                return insn;
+            }
         }
         return null;
     }
@@ -224,15 +321,32 @@ public class Parser
         SOUND_TIMER, // literal 'ST'
         I_INDIRECT; // literal '[I]'
 
-        public boolean matches(ASTNode node)
+        public boolean matches(ASTNode node, Assembler.CompilationContext context)
         {
             if ( node instanceof TextNode )
             {
-                if ( this == ADDRESS ) {
-                    // we'll assume this is actually an identifier
-                    // and the symbol table lookup will succeed
-                    return true;
+                // first, check if this is a register alias
+                final String text = ((TextNode) node).value;
+                if ( Identifier.isValid( text ) )
+                {
+                    final Integer regNum = context.getRegisterAlias( text );
+                    if ( regNum != null )
+                    {
+                        if ( this == REGISTER_V0 )
+                        {
+                            return regNum == 0;
+                        }
+                        return this == REGISTER;
+                    }
+                    if ( this != ADDRESS ) {
+                        return false;
+                    }
+                    // check if this is a resolvable symbol
+                    final Identifier id = Identifier.of( text );
+                    final SymbolTable.Symbol symbol = context.symbolTable.get( id );
+                    return symbol != null;
                 }
+
                 switch( ((TextNode) node).value.toLowerCase() ) {
                     case "k":
                         return this == PRESSED_KEY;
@@ -258,17 +372,22 @@ public class Parser
                 }
                 return this == REGISTER;
             }
-            if ( node instanceof NumberNode )
+
+            if ( ExpressionEvaluator.isValueNode( node, context) )
             {
-                final int value = ((NumberNode) node).value;
-                if ( this == NIBBLE ) {
-                    return value >= 0 && value <= 15;
-                }
-                if ( this == BYTE) {
-                    return value >= 0 && value <= 255;
-                }
-                if ( this == ADDRESS) {
-                    return value >= 0 && value <= 0xfff;
+                final Object value = ExpressionEvaluator.evaluate( node, context, true );
+                if ( value instanceof Number)
+                {
+                    int v = ((Number) value).intValue();
+                    if ( this == NIBBLE ) {
+                        return v >= 0 && v <= 15;
+                    }
+                    if ( this == BYTE) {
+                        return v >= 0 && v <= 255;
+                    }
+                    if ( this == ADDRESS) {
+                        return v >= 0 && v <= 0xfff;
+                    }
                 }
             }
             return false;
@@ -641,10 +760,10 @@ public class Parser
             return value;
         }
 
-        public static Instruction findMatch(InstructionNode insn)
+        public static Instruction findMatch(InstructionNode insn, Assembler.CompilationContext context)
         {
             final List<Instruction> candidates =
-                Stream.of( values() ).filter( x -> matchesOperandTypes( insn, x ) ).collect( Collectors.toList() );
+            Stream.of( values() ).filter( x -> matchesOperandTypes( insn, x, context ) ).collect( Collectors.toList() );
             switch ( candidates.size() ) {
                 case 0 :
                     return null;
@@ -657,31 +776,15 @@ public class Parser
 
         protected int evaluate(ASTNode node, Assembler.CompilationContext ctx)
         {
-            if ( node instanceof NumberNode)
-            {
-                return ((NumberNode) node).value;
-            }
-            if ( node instanceof TextNode && ((TextNode) node).isValidIdentifier() )
-            {
-                final Identifier id = new Identifier( ((TextNode) node).value );
-                final SymbolTable.Symbol symbol = ctx.symbolTable.get( id );
-                if ( symbol == null ) {
-                    throw new RuntimeException("Unknown symbol '"+id.value+"'");
-                }
-                if ( !(symbol.value instanceof Number) ) {
-                    throw new RuntimeException("Symbol '"+symbol.name+"' has non-numeric value "+symbol.value);
-                }
-                return ((Number) symbol.value).intValue();
-            }
             if ( node instanceof RegisterNode ) {
                 return ((RegisterNode) node).regNum;
             }
-            throw new RuntimeException("Internal error, don't know how to evaluate "+node);
+            return ((Number) ExpressionEvaluator.evaluate( node,ctx,true )).intValue();
         }
 
         public abstract void compile(InstructionNode instruction, Assembler.CompilationContext context);
 
-        private static boolean matchesOperandTypes(InstructionNode node,Instruction insn)
+        private static boolean matchesOperandTypes(InstructionNode node,Instruction insn,Assembler.CompilationContext context)
         {
             if ( node.childCount() != insn.operandCount() ) {
                 return false;
@@ -692,7 +795,7 @@ public class Parser
             for ( int i = 0, len = insn.operandCount() ; i < len ; i++ )
             {
                 OperandType expected = insn.operandType( i );
-                if ( ! expected.matches( node.child(i) ) ) {
+                if ( ! expected.matches( node.child(i), context) ) {
                     return false;
                 }
             }
@@ -760,7 +863,7 @@ public class Parser
                 int regionStart = Math.max( lineStartOffset, offset-10);
                 int regionEnd = Math.min( lineEnd, offset+10);
                 final String errLine =
-                    line.substring( regionStart-lineStartOffset, regionEnd-lineStartOffset );
+                line.substring( regionStart-lineStartOffset, regionEnd-lineStartOffset );
                 final int col = offset - lineStartOffset;
                 System.err.println( "Error at line "+lineNo+", column "+col);
                 System.err.println( errLine );
