@@ -21,13 +21,13 @@ Maven 3.x, JDK 11+
   - single stepping
   - step over subroutine call
   - unconditional breakpoints (just click on line in debugger window)
-  - crude sprite viewer
 - Assembler
   - Instruction as described in http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
+  - Syntax highlighting
   - Support for hexadecimal (0x1234), decimal (1234) and binary (%101101) number literals
-  - Support for labels (valid identifier followed by a colon) ; valid identifiers
-    to not start with a digit and otherwise contain only digits,letters or underscores
-  - TODO: Currently no support for initializing memory locations to specific values
+  - Support for global ( label: ) and local ( .label) labels
+    Labels must not be a reserved word, start with a digit and otherwise contain only digits,letters or underscores
+  - Support for .byte / .word / .reserve / .origin directives 
 - Disassembler
   - Syntax as described in http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
-
+- Sprite viewer
