@@ -4,8 +4,9 @@ public class DirectiveNode extends ASTNode
 {
     public enum Type
     {
-        INITIALIZED_MEMORY,
-        UNINITIALIZED_MEMORY,
+        BYTE,
+        WORD,
+        RESERVE,
         EQU,
         ORIGIN,
         ALIAS
@@ -34,6 +35,9 @@ public class DirectiveNode extends ASTNode
                 case ".equ":
                 case ".alias":
                 case ".origin":
+                case ".byte":
+                case ".word":
+                case ".reserve":
                     return true;
             }
         }

@@ -94,9 +94,9 @@ public class Assembler
         final ASTNode ast = p.parse();
         System.out.println( "---- AST ---\n" );
         ast.visitInOrder( (node, depth) ->
-                          {
-                              System.out.println( StringUtils.repeat( ' ', depth ) + " " + node );
-                          } );
+        {
+            System.out.println( StringUtils.repeat( ' ', depth ) + " " + node );
+        } );
         final byte[] binary = new Assembler().assemble( ast, 0x200 );
 
         try (out)
@@ -144,11 +144,37 @@ public class Assembler
             return StringUtils.leftPad( Integer.toHexString( value ), 4, '0' );
         }
 
+        public void writeByte(int iValue)
+        {
+            try
+            {
+                executable.write( (byte) iValue );
+                currentAddress += 1;
+            }
+            catch (IOException e)
+            {
+                throw new RuntimeException("Failed to write binary",e);
+            }
+        }
+
+        public void reserveBytes(int count)
+        {
+            for ( int i = count ; i > 0 ; i--)
+            {
+                writeByte( 0 );
+            }
+        }
+
         public void writeWord(Parser.Instruction insn, int word)
         {
             try
             {
-                System.out.println( hex( currentAddress ) + ": " + insn.name() + " - 0x" + hex( word ) );
+                if ( insn != null )
+                {
+                    System.out.println( hex( currentAddress ) + ": " + insn.name() + " - 0x" + hex( word ) );
+                } else {
+                    System.out.println( hex( currentAddress ) + ": " + hex( word ) );
+                }
                 executable.write( (word & 0xff00) >>> 8 );
                 executable.write( (word & 0xff) );
                 currentAddress += 2;
@@ -162,35 +188,69 @@ public class Assembler
     public abstract class CompilationPhase implements ASTNode.Visitor
     {
 
-        protected final void visitDirective(ASTNode node)
+        protected final void visitDirective(ASTNode node, boolean generateCode)
         {
             if ( node instanceof DirectiveNode )
             {
-                if ( ((DirectiveNode) node).type == DirectiveNode.Type.ALIAS )
+                final DirectiveNode directive = (DirectiveNode) node;
+                switch ( directive.type )
                 {
-                    final RegisterNode regNode = (RegisterNode) node.child( 0 );
-                    final IdentifierNode idNode = (IdentifierNode) node.child( 1 );
-                    compilationContext.symbolTable.redefine( compilationContext.getLastGlobalLabel(),
-                                                             idNode.identifier,
-                                                             SymbolTable.Symbol.Type.REGISTER_ALIAS, regNode.regNum );
-                }
-                else if ( ((DirectiveNode) node).type == DirectiveNode.Type.ORIGIN )
-                {
-                    visitOrigin(node);
+                    case ALIAS:
+                        final RegisterNode regNode = (RegisterNode) node.child( 0 );
+                        final IdentifierNode idNode = (IdentifierNode) node.child( 1 );
+                        compilationContext.symbolTable.redefine( compilationContext.getLastGlobalLabel(),
+                                idNode.identifier,
+                                SymbolTable.Symbol.Type.REGISTER_ALIAS, regNode.regNum );
+                        break;
+                    case ORIGIN:
+                        visitOrigin( node );
+                        break;
+                    case BYTE:
+                        if ( generateCode )
+                        {
+                            for (ASTNode arg : directive.children)
+                            {
+                                final Integer iValue = ExpressionEvaluator.evaluateByte( arg, compilationContext, true );
+                                compilationContext.writeByte( iValue );
+                            }
+                        }
+                        else
+                        {
+                            compilationContext.currentAddress += directive.childCount();
+                        }
+                        // TODO: Alignment after writing an odd number of bytes?
+                        break;
+                    case WORD:
+                        if ( generateCode )
+                        {
+                            for (ASTNode arg : directive.children)
+                            {
+                                final Integer value = ExpressionEvaluator.evaluateWord( arg, compilationContext, true );
+                                compilationContext.writeWord( null, value );
+                            }
+                        }
+                        else
+                        {
+                            compilationContext.currentAddress += directive.childCount() * 2;
+                        }
+                        break;
+                    case RESERVE:
+                        final Integer value = ExpressionEvaluator.evaluateWord( directive.child( 0 ), compilationContext, true );
+                        if ( generateCode )
+                        {
+                            compilationContext.reserveBytes( value );
+                        } else {
+                            compilationContext.currentAddress += value;
+                        }
+                        // TODO: Alignment after allocating an odd number of bytes?
+                        break;
                 }
             }
         }
 
         private final void visitOrigin(ASTNode node)
         {
-            Object value = ExpressionEvaluator.evaluate( node.child(0), compilationContext, true );
-            if ( !(value instanceof Number) ) {
-
-            }
-            final int newAddress = ((Number) value).intValue();
-            if ( newAddress < 0 || newAddress > 0xfff ) {
-                throw new RuntimeException(".origin requires a value 0x00 - 0xfff but got 0x"+Integer.toHexString( newAddress ) );
-            }
+            Integer newAddress = ExpressionEvaluator.evaluateAddress( node.child(0), compilationContext, true );
             if ( newAddress < compilationContext.currentAddress ) {
                 throw new RuntimeException("Cannot set origin 0x"+Integer.toHexString( newAddress )+" which is before current address (0x"+Integer.toHexString( compilationContext.currentAddress ));
             }
@@ -210,11 +270,11 @@ public class Assembler
                     final IdentifierNode identifierNode = (IdentifierNode) node.child( 0 );
                     final Object value = ExpressionEvaluator.evaluate( node.child( 1 ), compilationContext, true );
                     compilationContext.symbolTable.define( SymbolTable.GLOBAL_SCOPE, identifierNode.identifier,
-                                                           SymbolTable.Symbol.Type.EQU, value );
+                            SymbolTable.Symbol.Type.EQU, value );
                 }
                 else
                 {
-                    visitDirective( node );
+                    visitDirective( node, false );
                 }
             }
             else if ( node instanceof LabelNode )
@@ -225,21 +285,21 @@ public class Assembler
                     if ( compilationContext.lastGlobalLabel == SymbolTable.GLOBAL_SCOPE )
                     {
                         throw new RuntimeException( "Cannot define a local label without defining a global label " +
-                                                        "first" );
+                                "first" );
                     }
                     compilationContext.symbolTable.define(
-                        compilationContext.lastGlobalLabel,
-                        ln.id,
-                        SymbolTable.Symbol.Type.LABEL,
-                        compilationContext.currentAddress );
+                            compilationContext.lastGlobalLabel,
+                            ln.id,
+                            SymbolTable.Symbol.Type.LABEL,
+                            compilationContext.currentAddress );
                 }
                 else
                 {
                     final SymbolTable.Symbol symbol = compilationContext.symbolTable.define(
-                        SymbolTable.GLOBAL_SCOPE,
-                        ln.id,
-                        SymbolTable.Symbol.Type.LABEL,
-                        compilationContext.currentAddress );
+                            SymbolTable.GLOBAL_SCOPE,
+                            ln.id,
+                            SymbolTable.Symbol.Type.LABEL,
+                            compilationContext.currentAddress );
                     compilationContext.lastGlobalLabel = symbol.name;
                 }
             }
@@ -257,7 +317,7 @@ public class Assembler
         {
             if ( node instanceof DirectiveNode )
             {
-                visitDirective( node );
+                visitDirective( node,true );
             }
             else if ( node instanceof LabelNode )
             {
@@ -270,7 +330,7 @@ public class Assembler
             else if ( node instanceof InstructionNode )
             {
                 final Parser.Instruction instruction =
-                    ((InstructionNode) node).getInstruction( compilationContext );
+                        ((InstructionNode) node).getInstruction( compilationContext );
                 if ( instruction == null )
                 {
                     throw new RuntimeException( "Unknown instruction @ " + node );

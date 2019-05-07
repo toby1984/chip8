@@ -9,7 +9,6 @@ import static org.junit.Assert.*;
 
 public class AssemblerTest
 {
-
     @Test
     public void assemble1() throws IOException
     {
@@ -36,6 +35,46 @@ public class AssemblerTest
                         "se x,0\n" +
                         "jp label";
         assemble(src);
+    }
+
+    @Test
+    public void testWriteBytes() throws IOException
+    {
+        final String src =
+                        ".byte %1,0x2,%101";
+        final byte[] data = assemble( src );
+        assertEquals( 3, data.length );
+        assertEquals( (byte) 1, data[0] );
+        assertEquals( (byte) 2, data[1] );
+        assertEquals( (byte) 5, data[2] );
+    }
+
+    @Test
+    public void testWriteWords() throws IOException
+    {
+        final String src =
+                ".word %1,0x2,%101";
+        final byte[] data = assemble( src );
+        assertEquals( 6, data.length );
+        assertEquals( (byte) 0, data[0] );
+        assertEquals( (byte) 1, data[1] );
+        assertEquals( (byte) 0, data[2] );
+        assertEquals( (byte) 2, data[3] );
+        assertEquals( (byte) 0, data[4] );
+        assertEquals( (byte) 5, data[5] );
+    }
+
+    @Test
+    public void testReserve() throws IOException
+    {
+        final String src =
+                ".reserve 10";
+        final byte[] data = assemble( src );
+        assertEquals( 10, data.length );
+        for ( int i =0 ; i < data.length ; i++)
+        {
+            assertEquals( (byte) 0, data[i] );
+        }
     }
 
     @Test

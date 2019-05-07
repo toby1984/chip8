@@ -26,6 +26,48 @@ public class ExpressionEvaluator
                 node instanceof OperatorNode;
     }
 
+    public static Integer evaluateAddress(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    {
+        final Integer value = evaluateNumber( node, context, failOnErrors );
+        if ( value != null && (value < 0 || value > 0xfff) )
+        {
+            throw new RuntimeException( "Expected a 12-bit value but got " + value + " @ " + node );
+        }
+        return value;
+    }
+
+    public static Integer evaluateWord(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    {
+        final Integer value = evaluateNumber( node, context, failOnErrors );
+        if ( value != null && (value < 0 || value > 65535) )
+        {
+            throw new RuntimeException( "Expected a 16-bit value but got " + value + " @ " + node );
+        }
+        return value;
+    }
+
+    public static Integer evaluateByte(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    {
+        final Integer value = evaluateNumber( node, context, failOnErrors );
+        if ( value != null && (value < 0 || value > 255) )
+        {
+            throw new RuntimeException( "Expected an 8-bit value but got " + value + " @ " + node );
+        }
+        return value;
+    }
+
+    public static Integer evaluateNumber(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    {
+        Object value = evaluate(node,context,failOnErrors);
+        if ( value != null ) {
+            if ( !(value instanceof Number) ) {
+                throw new RuntimeException("Expected a number but got "+value+" @ "+node);
+            }
+            return ((Number) value).intValue();
+        }
+        return null;
+    }
+
     public static Object evaluate(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
     {
         if ( ! isValueNode( node, context) ) {

@@ -48,6 +48,7 @@ public abstract class Keyboard
     public void keyReleased(int key)
     {
         Validate.isTrue(key>=0 && key <= 0x0f);
+        System.out.println("RELEASED: "+key);
         pressedKeys.remove(key);
         getDriver().keyReleased(key);
     }

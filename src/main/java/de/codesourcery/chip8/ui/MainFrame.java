@@ -18,6 +18,7 @@ package de.codesourcery.chip8.ui;
 import de.codesourcery.chip8.Disassembler;
 import de.codesourcery.chip8.asm.Assembler;
 import de.codesourcery.chip8.asm.ast.ASTNode;
+import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
 import de.codesourcery.chip8.asm.ast.RegisterNode;
@@ -318,9 +319,9 @@ public class MainFrame extends JFrame
                 if ( adr != null )
                 {
                     final String text = controller.emulator.memory.dump(
-                        adr % controller.emulator.memory.getSizeInBytes(),
-                        BYTES_TO_DUMP,
-                        BYTES_PER_ROW);
+                            adr % controller.emulator.memory.getSizeInBytes(),
+                            BYTES_TO_DUMP,
+                            BYTES_PER_ROW);
                     SwingUtilities.invokeLater(() -> dump.setText(text));
                 }
             }
@@ -718,8 +719,8 @@ public class MainFrame extends JFrame
                         {
                             System.out.println( threadName()+" - getting breakpoints");
                             ip.getAllBreakpoints().stream()
-                                .filter(x -> !x.isTemporary)
-                                .forEach(x -> bps.put(x.address, x));
+                                    .filter(x -> !x.isTemporary)
+                                    .forEach(x -> bps.put(x.address, x));
                             System.out.println(threadName()+" - read breakpoints:\n"+bps.values());
                         }
                     });
@@ -925,7 +926,7 @@ public class MainFrame extends JFrame
                 StyleConstants.setForeground(insnStyle, Color.BLUE);
 
                 identifierStyle = document().addStyle( "identifier", null );
-                StyleConstants.setForeground(identifierStyle, Color.GREEN);
+                StyleConstants.setForeground(identifierStyle, Color.GREEN.darker());
 
                 registerStyle = document().addStyle( "register", null );
                 StyleConstants.setForeground(registerStyle, Color.MAGENTA);
@@ -986,16 +987,16 @@ public class MainFrame extends JFrame
                                             if (node instanceof InstructionNode)
                                             {
                                                 document.setCharacterAttributes(
-                                                    region.getStartingOffset(), region.getLength(), insnStyle, true);
-                                            } else if ( node instanceof LabelNode ) {
+                                                        region.getStartingOffset(), region.getLength(), insnStyle, true);
+                                            } else if ( node instanceof LabelNode || node instanceof IdentifierNode ) {
                                                 document.setCharacterAttributes(
-                                                    region.getStartingOffset(), region.getLength(), identifierStyle, true);
+                                                        region.getStartingOffset(), region.getLength(), identifierStyle, true);
                                             } else if ( node instanceof TextNode ) {
                                                 document.setCharacterAttributes(
-                                                    region.getStartingOffset(), region.getLength(), textStyle, true);
+                                                        region.getStartingOffset(), region.getLength(), textStyle, true);
                                             } else if ( node instanceof RegisterNode ) {
                                                 document.setCharacterAttributes(
-                                                    region.getStartingOffset(), region.getLength(), registerStyle, true);
+                                                        region.getStartingOffset(), region.getLength(), registerStyle, true);
                                             }
                                         });
                                     }
@@ -1175,6 +1176,9 @@ public class MainFrame extends JFrame
     private static File selectFileOpen(File file)
     {
         final JFileChooser chooser = new JFileChooser(file);
+        if ( file != null ) {
+            chooser.setSelectedFile( file );
+        }
         int outcome = chooser.showOpenDialog(null );
         final File selected = chooser.getSelectedFile();
         if ( outcome == JFileChooser.APPROVE_OPTION && selected != null && selected.exists() && selected.isFile() )
@@ -1187,6 +1191,9 @@ public class MainFrame extends JFrame
     private static File selectFileSave(File file)
     {
         final JFileChooser chooser = new JFileChooser(file);
+        if ( file != null ) {
+            chooser.setSelectedFile( file );
+        }
         int outcome = chooser.showSaveDialog(null );
         final File selected = chooser.getSelectedFile();
         if ( outcome == JFileChooser.APPROVE_OPTION && selected != null && ! selected.isDirectory() )
@@ -1209,13 +1216,13 @@ public class MainFrame extends JFrame
         final JMenu view = new JMenu( "View" );
 
         Stream.of( ConfigKey.values() ).filter( c -> c.isInternalFrame )
-            .sorted( Comparator.comparing( a -> a.displayName ) )
-            .forEach( key -> cbMenuItem(view, key.displayName, () ->
-                                                                   getWindow( key )
-                                                                       .map( Component::isVisible )
-                                                                       .orElse( false ),
-                () -> toggleVisibility( key ) )
-            );
+                .sorted( Comparator.comparing( a -> a.displayName ) )
+                .forEach( key -> cbMenuItem(view, key.displayName, () ->
+                                getWindow( key )
+                                        .map( Component::isVisible )
+                                        .orElse( false ),
+                        () -> toggleVisibility( key ) )
+                );
         bar.add( view );
         return bar;
     }
@@ -1223,11 +1230,11 @@ public class MainFrame extends JFrame
     private void toggleVisibility(ConfigKey configKey)
     {
         windows.stream().filter( x -> x.configKey.equals( configKey ) )
-            .forEach( w ->
-            {
-                w.setVisible( !w.isVisible() );
-                Configuration.saveWindowState( config, configKey,w);
-            });
+                .forEach( w ->
+                {
+                    w.setVisible( !w.isVisible() );
+                    Configuration.saveWindowState( config, configKey,w);
+                });
 
         configProvider.save();
     }

@@ -323,6 +323,38 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             final DirectiveNode result;
             switch( directiveTok.value )
             {
+                case "reserve":
+                    result = new DirectiveNode( DirectiveNode.Type.RESERVE, directiveRegion);
+                    ASTNode node = parseExpression();
+                    if ( node == null ) {
+                        throw new RuntimeException("Missing parameter @ "+lexer.peek());
+                    }
+                    result.add( node );
+                    return result;
+                case "byte": // .byte 1,2,3 / .word 1234,5678
+                case "word": // .byte 1,2,3
+                    DirectiveNode.Type type = directiveTok.value.equals("byte") ?
+                            DirectiveNode.Type.BYTE : DirectiveNode.Type.WORD;
+                    result = new DirectiveNode( type, directiveRegion );
+
+                    boolean valueRequired = true;
+                    do
+                    {
+                        node = parseExpression();
+                        if ( node == null ) {
+                            if ( valueRequired ) {
+                                throw new RuntimeException("Expected a value @ "+lexer.peek());
+                            }
+                            break;
+                        }
+                        result.add( node );
+                        valueRequired = false;
+                        if ( lexer.peek().is(TokenType.COMMA ) ) {
+                            lexer.next();
+                            valueRequired = true;
+                        }
+                     } while (true);
+                    return result;
                 case "origin": // .origin 0x1234
                     ASTNode address = parseExpression();
                     if ( address == null ) {
@@ -908,7 +940,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             if ( node instanceof RegisterNode ) {
                 return ((RegisterNode) node).regNum;
             }
-            return ((Number) ExpressionEvaluator.evaluate( node,ctx,true )).intValue();
+            return ExpressionEvaluator.evaluateNumber( node,ctx,true );
         }
 
         public abstract void compile(InstructionNode instruction, Assembler.CompilationContext context);
@@ -925,10 +957,10 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             {
                 OperandType expected = insn.operandType( i );
                 final boolean matches = expected.matches( node.child( i ), context );
-//                if ( ! matches )
-//                {
-//                    System.out.println( insn.name() + ",operand " + i + " (" + expected + ") does NOT match " + node.child( i ) );
-//                }
+                if ( ! matches )
+                {
+                    System.out.println( insn.name() + ",operand " + i + " (" + expected + ") does NOT match " + node.child( i ) );
+                }
                 if ( ! matches ) {
                     return false;
                 }

@@ -35,12 +35,16 @@ public class Identifier
 
     static {
         RESERVED.add("i");
+        RESERVED.add("k");
         RESERVED.add("dt");
         RESERVED.add("st");
         RESERVED.add("f");
         RESERVED.add("b");
         RESERVED.add("origin");
         RESERVED.add("equ");
+        RESERVED.add("byte");
+        RESERVED.add("word");
+        RESERVED.add("reserve");
         RESERVED.add("alias");
         RESERVED.add("pc");
         RESERVED.add("[i]");
