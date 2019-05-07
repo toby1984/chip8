@@ -35,6 +35,7 @@ import org.apache.commons.lang3.Validate;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JDesktopPane;
+import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JInternalFrame;
@@ -55,6 +56,8 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.event.HyperlinkListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
@@ -80,9 +83,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -804,6 +809,69 @@ public class MainFrame extends JFrame
             private final JButton compile = new JButton("Compile");
             private final JButton load = new JButton("Load");
             private final JButton save = new JButton("Save");
+            private final JButton help = new JButton("Syntax Help");
+
+            private final JFrame helpFrame = new JFrame("help")
+            {
+                @Override
+                public void setVisible(boolean b)
+                {
+                    if ( b ) {
+                        loadHTML();
+                    }
+                    super.setVisible( b );
+                }
+
+                private void loadHTML()
+                {
+                    final String PATH = "/asm_help.html";
+                    final URL url = getClass().getResource( PATH );
+                    if ( url != null )
+                    {
+                        try
+                        {
+                            textPane.setPage( url );
+                        }
+                        catch (IOException e)
+                        {
+                            e.printStackTrace();
+                            new Exception("ASM syntax help file not found in classpath '"+PATH+"'").printStackTrace();
+                        }
+                    }
+                    else
+                    {
+                        new Exception("ASM syntax help file not found in classpath '"+PATH+"'").printStackTrace();
+                    }
+                }
+
+                private final JEditorPane textPane = new JEditorPane();
+
+                {
+                    setDefaultCloseOperation( JFrame.HIDE_ON_CLOSE );
+                    textPane.setEditable( false );
+                    textPane.setPreferredSize( new Dimension(640,240 ) );
+                    getContentPane().add( new JScrollPane( textPane ) );
+                    pack();
+                    setLocationRelativeTo( null );
+
+                    textPane.addHyperlinkListener(new HyperlinkListener()
+                    {
+                        @Override
+                        public void hyperlinkUpdate(final HyperlinkEvent event)
+                        {
+                            if (HyperlinkEvent.EventType.ACTIVATED == event.getEventType())
+                            {
+                                System.out.println("JEditorPane link click: url='" + event.getURL() + "' description='" + event.getDescription() + "'");
+                                String reference = event.getDescription();
+                                if (reference != null && reference.startsWith("#")) { // link must start with # to be internal reference
+                                    reference = reference.substring(1);
+                                    textPane.scrollToReference(reference);
+                                }
+                            }
+                        }
+                    });
+                }
+            };
 
             private final Thread highlightThread;
             private final Object DOC_LOCK = new Object();
@@ -962,6 +1030,14 @@ public class MainFrame extends JFrame
 
                 getContentPane().setLayout( new GridBagLayout());
 
+                help.addActionListener( ev -> {
+                    if ( helpFrame.isVisible() ) {
+                        helpFrame.setVisible( false );
+                    } else {
+                        helpFrame.setVisible( true );
+                    }
+                });
+
                 save.addActionListener( ev -> {
 
                     final File last = Configuration.of(config).getLastSource();
@@ -1000,6 +1076,7 @@ public class MainFrame extends JFrame
                 buttons.add( compile );
                 buttons.add( load );
                 buttons.add( save );
+                buttons.add( help );
 
                 GridBagConstraints cnstrs = new GridBagConstraints();
                 cnstrs.gridx = 0; cnstrs.gridy = 0;
@@ -1194,6 +1271,7 @@ public class MainFrame extends JFrame
         Configuration.saveWindowState(config, ConfigKey.MAINFRAME, MainFrame.this);
         configProvider.save();
         dispose();
+        System.exit(0);
     }
 
     private static String threadName() {

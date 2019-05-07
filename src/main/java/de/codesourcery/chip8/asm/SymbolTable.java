@@ -27,7 +27,9 @@ import java.util.Map;
  */
 public class SymbolTable
 {
-    private final Map<Identifier,Symbol> symbols = new HashMap<>();
+    public static final Identifier GLOBAL_SCOPE = new Identifier("_GLOBAL_");
+
+    private final Map<String,Symbol> symbols = new HashMap<>();
 
     /**
      * A symbol.
@@ -41,17 +43,20 @@ public class SymbolTable
             REGISTER_ALIAS
         }
 
+        public final Identifier scope;
         public final Identifier name;
         public Type type;
         public Object value;
 
-        public Symbol(Identifier name)
+        public Symbol(Identifier scope, Identifier name)
         {
+            this.scope = scope;
             this.name = name;
         }
 
-        public Symbol(Identifier name,Symbol.Type type,Object value)
+        public Symbol(Identifier scope,Identifier name,Symbol.Type type,Object value)
         {
+            this.scope = scope;
             this.name = name;
             this.type = type;
             this.value = value;
@@ -72,42 +77,53 @@ public class SymbolTable
 
     /**
      * Declares a symbol.
+     * @param scope the symbol's scope
      * @param identifier symbol name
+     * @return the declared symbol
      */
-    public void declare(Identifier identifier) {
-        declare(identifier,null);
+    public Symbol declare(Identifier scope, Identifier identifier) {
+        return declare(identifier,null);
     }
 
     /**
      * Declares a symbol.
+     * @param scope the symbol's scope
      * @param identifier symbol name
      * @param type symbol type (may be NULL)
+     * @return the declared symbol
      */
-    public void declare(Identifier identifier,Symbol.Type type)
+    public Symbol declare(Identifier scope, Identifier identifier,Symbol.Type type)
     {
+        Validate.notNull( scope, "scope must not be null" );
         Validate.notNull(identifier, "identifier must not be null");
-        if ( ! symbols.containsKey( identifier ) ) {
-            symbols.put( identifier, new Symbol(identifier,type,null) );
+        Symbol symbol = get( scope, identifier );
+        if ( symbol == null ) {
+            symbol = new Symbol(scope,identifier,type,null);
+            symbols.put( scope.value+"."+identifier.value, symbol );
         }
+        return symbol;
     }
 
     /**
      * Defines a symbol.
      *
+     * @param scope the symbol's scope
      * @param identifier symbol name
      * @param value symbol value (must not be NULL).
+     * @return the defined symbol
      */
-    public void define(Identifier identifier, Symbol.Type type, Object value)
+    public Symbol define(Identifier scope, Identifier identifier, Symbol.Type type, Object value)
     {
+        Validate.notNull( scope, "scope must not be null" );
         Validate.notNull(identifier, "identifier must not be null");
         Validate.notNull( type, "type must not be null" );
         Validate.notNull( value, "value must not be null" );
 
-        Symbol existing = get( identifier );
+        Symbol existing = get( scope, identifier );
         if ( existing == null ) {
-            existing = new Symbol(identifier,type,value);
-            symbols.put( identifier, existing );
-            return;
+            existing = new Symbol(scope,identifier,type,value);
+            symbols.put( scope.value+"."+identifier, existing );
+            return existing;
         }
         if ( existing.value != null ) {
             throw new IllegalStateException( "Symbol "+existing+" is already declared" );
@@ -117,25 +133,28 @@ public class SymbolTable
         }
         existing.type = type;
         existing.value = value;
+        return existing;
     }
 
-    public void redefine(Identifier identifier, Symbol.Type type, Object value)
+    public Symbol redefine(Identifier scope,Identifier identifier, Symbol.Type type, Object value)
     {
+        Validate.notNull( scope, "scope must not be null" );
         Validate.notNull(identifier, "identifier must not be null");
         Validate.notNull( type, "type must not be null" );
         Validate.notNull( value, "value must not be null" );
 
-        Symbol existing = get( identifier );
+        Symbol existing = get( scope, identifier );
         if ( existing == null ) {
-            existing = new Symbol(identifier,type,value);
-            symbols.put( identifier, existing );
-            return;
+            existing = new Symbol(scope,identifier,type,value);
+            symbols.put(  scope.value+"."+identifier, existing );
+            return existing;
         }
         if ( existing.type != null && existing.type != type ) {
             throw new IllegalArgumentException("Refusing to redefine symbol "+existing+" with different type "+type);
         }
         existing.type = type;
         existing.value = value;
+        return existing;
     }
 
     /**
@@ -144,8 +163,9 @@ public class SymbolTable
      * @param identifier
      * @return symbol or <code>null</code> if not found
      */
-    public Symbol get(Identifier identifier) {
-        return symbols.get( identifier );
+    public Symbol get(Identifier scope,Identifier identifier)
+    {
+        return symbols.get( scope.value+"."+identifier.value );
     }
 
     /**
@@ -154,7 +174,7 @@ public class SymbolTable
      * @param identifier
      * @return
      */
-    public boolean isDeclared(Identifier identifier) {
-        return get(identifier) != null;
+    public boolean isDeclared(Identifier scope,Identifier identifier) {
+        return get(scope,identifier) != null;
     }
 }

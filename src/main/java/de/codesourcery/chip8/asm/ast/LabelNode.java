@@ -25,16 +25,22 @@ import de.codesourcery.chip8.asm.Identifier;
 public class LabelNode extends ASTNode
 {
     public Identifier id;
+    public final boolean isLocal;
 
-    public LabelNode(Identifier id,TextRegion region)
+    public LabelNode(Identifier id,boolean isLocal, TextRegion region)
     {
         super(region);
+        this.isLocal = isLocal;
         this.id = id;
+    }
+
+    public boolean isGlobal() {
+        return ! isLocal;
     }
 
     @Override
     public String toString()
     {
-        return "LabelNode[ "+id+" ]";
+        return "LabelNode[ "+id+" , local: "+isLocal+" ]";
     }
 }

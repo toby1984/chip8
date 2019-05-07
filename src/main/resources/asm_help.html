@@ -1,0 +1,409 @@
+<html>
+<body>
+
+<h2>TOC</h2>
+
+<ol>
+	<li><a href="#control_flow">Control flow</a></li>
+	<li><a href="#display">Display</a></li>
+	<li><a href="#conditionals">Conditionals</a></li>
+	<li><a href="#register_access">Register Access</a></li>
+	<li><a href="#arithmetic">Arithmetic</a></li>
+	<li><a href="#boolean_logic">Boolean Logic</a></li>
+	<li><a href="#keyboard_input">Keyboard Input</a></li>
+	<li><a href="#delay_timer">Delay Timer</a></li>
+	<li><a href="#sound_timer">Sound Timer</a></li>
+	<li><a href="#assembler_directives">Assembler Directives</a></li>
+</ol>
+
+<!-- Control Flow -->
+<a name="control_flow"><h2>Control Flow</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="0nnn">0<em>nnn</em></a></strong></td>
+		<td><strong>SYS <em>addr</em></strong></td>
+		<td>Jump to a machine code routine at <em>nnn</em>.</td>
+		<td>This instruction is only used on the old computers on which Chip-8 was originally implemented. It is ignored by modern interpreters.<br>
+			<font color="red">This instruction is not understood by the assembler.</font></td>
+	</tr>
+	<tr>
+		<td><strong><a name="00EE">00EE</a></strong></td>
+		<td><strong>RET</strong></td>
+		<td>Return from a subroutine</td>
+		<td>The interpreter sets the program counter to the address at the top of the
+			stack, then subtracts 1 from the stack pointer.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="1nnn">1<em>nnn</em></a></strong></td>
+		<td><strong>JP <em><em>addr</em></em></strong></td>
+		<td>Jump to location <em>nnn</em>.</td>
+		<td>The interpreter sets the program counter to <em>nnn</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="2nnn">2<em>nnn</em></a></strong></td>
+		<td><strong>CALL <em>addr</em></strong></td>
+		<td>Call subroutine at <em>nnn</em>.</td>
+		<td>The interpreter increments the stack pointer, then puts the current PC on
+			the top of the stack. The PC is then set to <em>nnn</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Bnnn">B<em>nnn</em></a></strong></td>
+		<td><strong>JP V0, <em>addr</em></strong></td>
+		<td>Jump to location <em>nnn</em> + V0.</td>
+		<td>The program counter is set to <em>nnn</em> plus the value of V0.</td>
+	</tr>
+</table>
+<!-- Display -->
+<a name="display"><h2>Display</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="00E0">00E0</a></strong></td>
+		<td>CLS</td>
+		<td>Clear the display.</td>
+		<td></td>
+	</tr>
+	<tr>
+		<td><strong><a name="Dxyn">D<em>xyn</em></a></strong></td>
+		<td><strong>DRW V<em>x</em>, V<em>y</em>, <em>nibble</em></strong></td>
+		<td>Display <em>n</em>-byte sprite starting at memory location I at (V<em>x</em>, V<em>y</em>), set VF = collision.</td>
+		<td>The interpreter reads <em>n</em> bytes from memory, starting at the address stored in
+			I. These bytes are then displayed as sprites on screen at coordinates (V<em>x</em>, V<em>y</em>).
+			Sprites are XORed onto the existing screen. If this causes any pixels to be
+			erased, VF is set to 1, otherwise it is set to 0. If the sprite is positioned
+			so part of it is outside the coordinates of the display, it wraps around to
+			the opposite side of the screen. See instruction <a href="#8xy3">8<em>xy</em>3</a> for
+			more information on XOR, and section 2.4, <a href="2.4">Display</a>, for
+			more information on the Chip-8 screen and sprites.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx29">F<em>x</em>29</a></strong></td>
+		<td><strong>LD F, V<em>x</em></strong></td>
+		<td>Set I = location of sprite for digit V<em>x</em>.</td>
+		<td>The value of I is set to the location for the hexadecimal sprite corresponding to
+			the value of V<em>x</em>. See section 2.4, <a href="#2.4">Display</a>, for more information
+			on the Chip-8 hexadecimal font.</td>
+	</tr>
+</table>
+<!-- Conditionals -->
+<a name="conditionals"><h2>Conditionals</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="3xkk">3<em>xkk</em></a></strong></td>
+		<td>S<strong>SE V<em>x</em>, <em>byte</em></strong></td>
+		<td>Skip next instruction if V<em>x</em> = <em>kk</em>.</td>
+		<td>The interpreter compares register V<em>x</em> to <em>kk</em>, and if they are
+			equal, increments the program counter by 2.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="4xkk">4<em>xkk</em></a></strong></td>
+		<td><strong>SNE V<em>x</em>, <em>byte</em></strong></td>
+		<td>Skip next instruction if V<em>x</em> != <em>kk</em>.</td>
+		<td>The interpreter compares register V<em>x</em> to <em>kk</em>, and if they are
+			not equal, increments the program counter by 2.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="5xy0">5<em>xy</em>0</a></strong></td>
+		<td><strong>SE V<em>x</em>, V<em>y</em></strong></td>
+		<td>Skip next instruction if V<em>x</em> = V<em>y</em>.</td>
+		<td>The interpreter compares register V<em>x</em> to register V<em>y</em>, and if
+			they are equal, increments the program counter by 2.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="9xy0">9<em>xy</em>0</a></strong></td>
+		<td><strong>SNE V<em>x</em>, V<em>y</em></strong></td>
+		<td>Skip next instruction if V<em>x</em> != V<em>y</em>.</td>
+		<td>The values of V<em>x</em> and V<em>y</em> are compared, and if they are not equal, the program
+			counter is increased by 2.</td>
+	</tr>
+</table>
+<!-- Register access -->
+<a name="register_access"><h2>Register Access</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="6xkk">6<em>xkk</em></a></strong></td>
+		<td><strong>LD V<em>x</em>, <em>byte</em></strong></td>
+		<td>Set V<em>x</em> = <em>kk</em>.</td>
+		<td>The interpreter puts the value <em>kk</em> into register V<em>x</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xy0">8<em>xy</em>0</a></strong></td>
+		<td><strong>LD V<em>x</em>, V<em>y</em></strong></td>
+		<td>Set V<em>x</em> = V<em>y</em>.</td>
+		<td>Stores the value of register V<em>y</em> in register V<em>x</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Annn">A<em>nnn</em></a></strong></td>
+		<td><strong>LD I, <em>addr</em></strong></td>
+		<td>Set I = <em>nnn</em>.</td>
+		<td>The value of register I is set to <em>nnn</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx55">F<em>x</em>55</a></strong></td>
+		<td><strong>LD [I], V<em>x</em></strong></td>
+		<td>Store registers V0 through V<em>x</em> in memory starting at location I.</td>
+		<td>The interpreter copies the values of registers V0 through V<em>x</em> into memory,
+			starting at the address in I.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx65">F<em>x</em>65</a></strong></td>
+		<td><strong>LD V<em>x</em>, [I]</strong></td>
+		<td>Read registers V0 through V<em>x</em> from memory starting at location I.</td>
+		<td>The interpreter reads values from memory starting at location I into registers
+			V0 through V<em>x</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx33">F<em>x</em>33</a></strong></td>
+		<td><strong>LD B, V<em>x</em></strong></td>
+		<td>Store BCD representation of V<em>x</em> in memory locations I, I+1, and I+2.</td>
+		<td>The interpreter takes the decimal value of V<em>x</em>, and places the hundreds
+			digit in memory at location in I, the tens digit at location I+1, and the
+			ones digit at location I+2.</td>
+	</tr>
+</table>
+<!-- Arithmetic -->
+<a name="arithmetic"><h2>Arithmetic</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xy4">8<em>xy</em>4</a></strong></td>
+		<td><strong>ADD V<em>x</em>, V<em>y</em></strong></td>
+		<td>Set V<em>x</em> = V<em>x</em> + V<em></em>y, set VF = carry.</td>
+		<td>The values of V<em>x</em> and V<em>y</em> are added together. If the result is greater than 8 bits
+			(i.e., &gt; 255,) VF is set to 1, otherwise 0. Only the lowest 8 bits of the result
+			are kept, and stored in V<em>x</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx1E">F<em>x</em>1E</a></strong></td>
+		<td><strong>ADD I, V<em>x</em></strong></td>
+		<td>Set I = I + V<em>x</em>.</td>
+		<td>The values of I and V<em>x</em> are added, and the results are stored in I.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="7xkk">7<em>xkk</em></a></strong></td>
+		<td><strong>ADD V<em>x</em>, <em>byte</em></strong></td>
+		<td>Set V<em>x</em> = V<em>x</em> + <em>kk</em>.</td>
+		<td>Adds the value <em>kk</em> to the value of register V<em>x</em>, then stores the result in V<em>x</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xy5">8<em>xy</em>5</a></strong></td>
+		<td><strong>SUB V<em>x</em>, V<em>y</em></strong></td>
+		<td>Set V<em>x</em> = V<em>x</em> - V<em>y</em>, set VF = NOT borrow.</td>
+		<td>If V<em>x</em> &gt; V<em>y</em>, then VF is set to 1, otherwise 0. Then V<em>y</em> is subtracted from V<em>x</em>,
+			and the results stored in V<em>x</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xy7">8<em>xy</em>7</a></strong></td>
+		<td><strong>SUBN V<em>x</em>, V<em>y</em></strong></td>
+		<td>Set V<em>x</em> = V<em>y</em> - V<em>x</em>, set VF = NOT borrow.</td>
+		<td>If V<em>y</em> &gt; V<em>x</em>, then VF is set to 1, otherwise 0. Then V<em>x</em> is subtracted from V<em>y</em>,
+			and the results stored in V<em>x</em>.</td>
+	</tr>
+</table>
+<!-- Boolean Logic -->
+<a name="boolean_logic"><h2>Boolean Logic</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xy1">8<em>xy</em>1</a></strong></td>
+		<td><strong>OR V<em>x</em>, V<em>y</em></strong></td>
+		<td>Set Vx = V<em>x</em> OR V<em>y</em>.</td>
+		<td>Performs a bitwise OR on the values of V<em>x</em> and V<em>y</em>, then stores the result in V<em>x</em>. A
+			bitwise OR compares the corrseponding bits from two values, and if either bit
+			is 1, then the same bit in the result is also 1. Otherwise, it is 0.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xy2">8<em>xy</em>2</a></strong></td>
+		<td><strong>AND V<em>x</em>, V<em>y</em></strong></td>
+		<td>Set V<em>x</em> = V<em>x</em> AND V<em>y</em>.</td>
+		<td>Performs a bitwise AND on the values of V<em>x</em> and V<em>y</em>, then stores the result in V<em>x</em>. A
+			bitwise AND compares the corrseponding bits from two values, and if both bits
+			are 1, then the same bit in the result is also 1. Otherwise, it is 0.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xy3">8<em>xy</em>3</a></strong></td>
+		<td><strong>XOR V<em>x</em>, V<em>y</em></strong></td>
+		<td>Set V<em>x</em> = V<em>x</em> XOR V<em>y</em>.</td>
+		<td>Performs a bitwise exclusive OR on the values of V<em>x</em> and V<em>y</em>, then stores the
+			result in V<em>x</em>. An exclusive OR compares the corrseponding bits from two values,
+			and if the bits are not both the same, then the corresponding bit in the result
+			is set to 1. Otherwise, it is 0.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xyE">8<em>xy</em>E</a></strong></td>
+		<td><strong>SHL V<em>x</em> {, V<em>y</em>}</strong></td>
+		<td>Set V<em>x</em> = V<em>x</em> SHL 1.</td>
+		<td>If the most-significant bit of Vx is 1, then VF is set to 1, otherwise to 0. Then
+			V<em>x</em> is multiplied by 2.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="8xy6">8<em>xy</em>6</a></strong></td>
+		<td><strong>SHR V<em>x</em> {, V<em>y</em>}</strong></td>
+		<td>Set V<em>x</em> = V<em>x</em> SHR 1.</td>
+		<td>If the least-significant bit of V<em>x</em> is 1, then VF is set to 1, otherwise 0. Then
+			V<em>x</em> is divided by 2.</td>
+	</tr>
+</table>
+<!-- Keyboard Input -->
+<a name="keyboard_input"><h2>Keyboard Input</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Ex9E">E<em>x</em>9E</a></strong></td>
+		<td><strong>SKP V<em>x</em></strong></td>
+		<td>Skip next instruction if key with the value of V<em>x</em> is pressed.</td>
+		<td>Checks the keyboard, and if the key corresponding to the value of V<em>x</em> is currently
+			in the down position, PC is increased by 2.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="ExA1">E<em>x</em>A1</a></strong></td>
+		<td><strong>SKNP V<em>x</em></strong></td>
+		<td>Skip next instruction if key with the value of V<em>x</em> is not pressed.</td>
+		<td>Checks the keyboard, and if the key corresponding to the value of V<em>x</em> is currently
+			in the up position, PC is increased by 2.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx0A">F<em>x</em>0A</a></strong></td>
+		<td><strong>LD V<em>x</em>, K</strong></td>
+		<td>Wait for a key press, store the value of the key in V<em>x</em>.</td>
+		<td>All execution stops until a key is pressed, then the value of that key
+			is stored in V<em>x</em>.</td>
+	</tr>
+</table>
+<!-- Delay Timer -->
+<a name="delay_timer"><h2>Delay Timer</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx07">F<em>x</em>07</a></strong></td>
+		<td><strong>LD V<em>x</em>, DT</strong></td>
+		<td>Set V<em>x</em> = delay timer value.</td>
+		<td>The value of DT is placed into V<em>x</em>.</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx15">F<em>x</em>15</a></strong></td>
+		<td><strong>LD DT, V<em>x</em></strong></td>
+		<td>Set delay timer = V<em>x</em>.</td>
+		<td>DT is set equal to the value of V<em>x</em>.</td>
+	</tr>
+</table>
+<!-- Sound timer -->
+<a name="sound_timer"><h2>Sound Timer</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Fx18">F<em>x</em>18</a></strong></td>
+		<td><strong>LD ST, V<em>x</em></strong></td>
+		<td>Set sound timer = V<em>x</em>.</td>
+		<td>ST is set equal to the value of V<em>x</em>.</td>
+	</tr>
+</table>
+<!-- Misc -->
+<h2>Miscellaneous</h2>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong><a name="Cxkk">C<em>xkk</em></a></strong></td>
+		<td><strong>RND V<em>x</em>, <em>byte</em></strong></td>
+		<td>Set V<em>x</em> = random <em>byte</em> AND <em>kk</em>.</td>
+		<td>The interpreter generates a random number from 0 to 255, which is then ANDed
+			with the value kk. The results are stored in V<em>x</em>. See instruction <a href="#8xy2">8<em>xy</em>2</a>
+			for more information on AND.</td>
+	</tr>
+</table>
+<!-- Assembler Directives -->
+<a name="assembler_directives"><h2>Assembler Directives</h2></a>
+<table border="1">
+	<tr>
+		<td>Binary</td>
+		<td>Syntax</td>
+		<td>Description</td>
+		<td>Details</td>
+	</tr>
+	<tr>
+		<td><strong>--</strong></td>
+		<td><strong>.equ A = B</strong></td>
+		<td>Assigns the expression B to the symbol A.</td>
+		<td></td>
+	</tr>
+	<tr>
+		<td><strong>--</strong></td>
+		<td><strong>.alias v0 = X</strong></td>
+		<td>Assigns the alias name X to the register V0.</td>
+		<td></td>
+	</tr>
+	<tr>
+		<td><strong>--</strong></td>
+		<td><strong>.origin A</strong></td>
+		<td>Makes sure code following this directive gets placed at the given memory address A.</td>
+		<td></td>
+	</tr>
+	<tr>
+		<td><strong>--</strong></td>
+		<td><strong>IDENTIFIER:</strong></td>
+		<td>Defines IDENTIFIER as a global label for the memory address in the generated binary.</td>
+		<td>Since all global labels share the same namespace, each identifier can be defined only once.</td>
+	</tr>
+	<tr>
+		<td><strong>--</strong></td>
+		<td><strong>.IDENTIFIER</strong></td>
+		<td>Defines IDENTIFIER as a local label for the memory address in the generated binary.</td>
+		<td>Local labels are always scoped to the previous global label (in fact you'll get an error if you try to use a local label without a global one).
+		</td>
+	</tr>
+</table>
+</body>
+</html>

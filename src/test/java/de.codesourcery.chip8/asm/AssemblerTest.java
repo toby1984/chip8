@@ -38,6 +38,20 @@ public class AssemblerTest
         assemble(src);
     }
 
+    @Test
+    public void testLocalLabel() throws IOException
+    {
+        final String src =
+            "global:\n" +
+                "ld v0,10\n" +
+                "ld v1,1\n" +
+                ".loop\n" +
+                "sub v0,v1\n" +
+                "se v0,0\n" +
+                "jp loop";
+        assemble(src);
+    }
+
     private byte[] assemble(String source) throws IOException
     {
 

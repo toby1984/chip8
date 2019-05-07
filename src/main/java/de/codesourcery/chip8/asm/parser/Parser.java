@@ -34,7 +34,6 @@ import de.codesourcery.chip8.asm.ast.TextNode;
 import de.codesourcery.chip8.asm.ast.TextRegion;
 import org.apache.commons.lang3.StringUtils;
 
-import javax.swing.plaf.synth.Region;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -243,13 +242,32 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
     private ASTNode parseLabel()
     {
+        if ( lexer.peek().is(TokenType.DOT ) ) {
+            final Token dot = lexer.next();
+            if ( lexer.peek().is(TokenType.IDENTIFIER ) )
+            {
+                final String value = lexer.peek().value;
+                if ( Identifier.isReserved( value ) || DirectiveNode.isValidDirective( "."+ value ) )
+                {
+                    lexer.pushBack( dot );
+                    return null;
+                }
+                // local label
+                Token label = lexer.next();
+                return new LabelNode( Identifier.of(label.value) , true, label.region() );
+            }
+            else
+            {
+                lexer.pushBack( dot );
+            }
+        }
         if ( lexer.peek().is(TokenType.IDENTIFIER ) )
         {
             Token tok = lexer.next();
             if ( lexer.peek().is(TokenType.COLON ) )
             {
                 lexer.next();
-                return new LabelNode( new Identifier( tok.value ) , tok.region() );
+                return new LabelNode( new Identifier( tok.value ) , false, tok.region() );
             }
             lexer.pushBack( tok );
         }
@@ -305,6 +323,14 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             final DirectiveNode result;
             switch( directiveTok.value )
             {
+                case "origin": // .origin 0x1234
+                    ASTNode address = parseExpression();
+                    if ( address == null ) {
+                        throw new RuntimeException("Expected an argument");
+                    }
+                    result = new DirectiveNode( DirectiveNode.Type.ORIGIN, directiveRegion );
+                    result.add( address );
+                    return result;
                 case "alias": // .alias v0 = x
                     if ( ! lexer.peek().is( TokenType.REGISTER ) ) {
                         throw new RuntimeException("Expected a register name (v0...v15) but got "+lexer.peek());
@@ -411,25 +437,31 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             if ( node instanceof IdentifierNode) {
 
                 final Identifier id = ((IdentifierNode) node).identifier;
-                final SymbolTable.Symbol symbol = context.symbolTable.get( id );
-                if ( symbol != null )
+                // try local scope first
+                SymbolTable.Symbol symbol = context.symbolTable.get( context.getLastGlobalLabel() , id );
+                if ( symbol == null )
                 {
-                    Object value = symbol.value;
-                    switch( symbol.type ) {
+                    // fall-back to global scope
+                    symbol = context.symbolTable.get( SymbolTable.GLOBAL_SCOPE, id );
+                }
+                if ( symbol == null ) {
+                    throw new RuntimeException("Unknown symbol '"+id.value+"'");
+                }
+                Object value = symbol.value;
+                switch( symbol.type ) {
 
-                        case LABEL:
-                        case EQU:
-                            if ( value instanceof Number) {
-                                return checkNumberInRange( ((Number) value).intValue() );
-                            }
-                            return this == ADDRESS;
-                        case REGISTER_ALIAS:
-                            if ( Integer.valueOf(0).equals( symbol.value ) )
-                            {
-                                return this == REGISTER_V0 || this == REGISTER;
-                            }
-                            return this == REGISTER;
-                    }
+                    case LABEL:
+                    case EQU:
+                        if ( value instanceof Number) {
+                            return checkNumberInRange( ((Number) value).intValue() );
+                        }
+                        return this == ADDRESS;
+                    case REGISTER_ALIAS:
+                        if ( Integer.valueOf(0).equals( symbol.value ) )
+                        {
+                            return this == REGISTER_V0 || this == REGISTER;
+                        }
+                        return this == REGISTER;
                 }
                 return false;
             }
@@ -892,7 +924,12 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             for ( int i = 0, len = insn.operandCount() ; i < len ; i++ )
             {
                 OperandType expected = insn.operandType( i );
-                if ( ! expected.matches( node.child(i), context) ) {
+                final boolean matches = expected.matches( node.child( i ), context );
+//                if ( ! matches )
+//                {
+//                    System.out.println( insn.name() + ",operand " + i + " (" + expected + ") does NOT match " + node.child( i ) );
+//                }
+                if ( ! matches ) {
                     return false;
                 }
             }

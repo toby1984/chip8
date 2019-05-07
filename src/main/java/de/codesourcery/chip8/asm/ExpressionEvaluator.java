@@ -58,9 +58,14 @@ public class ExpressionEvaluator
         if ( node instanceof IdentifierNode )
         {
             final Identifier id = ((IdentifierNode) node).identifier;
-            if ( context.symbolTable.isDeclared( id ) )
+            // try local scope first
+            SymbolTable.Symbol symbol = context.symbolTable.get( context.getLastGlobalLabel(), id );
+            if ( symbol == null ) {
+                // fall-back to global scope
+                symbol = context.symbolTable.get( SymbolTable.GLOBAL_SCOPE, id );
+            }
+            if ( symbol != null )
             {
-                final SymbolTable.Symbol symbol = context.symbolTable.get( id );
                 if ( symbol.value != null ) {
                     return symbol.value;
                 }
