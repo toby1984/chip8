@@ -46,6 +46,15 @@ public final class Scanner
         return index >= input.length();
     }
 
+    public void back() throws IllegalStateException
+    {
+        if ( index <= 0 )
+        {
+            throw new IllegalStateException("Already at start of input");
+        }
+        index--;
+    }
+
     public char next()
     {
         assertNotEOF();

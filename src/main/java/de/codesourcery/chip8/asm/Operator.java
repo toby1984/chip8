@@ -19,6 +19,43 @@ public enum Operator
             return intValue( values.get(0) ) - intValue( values.get(1) );
         }
     },
+    SHIFT_LEFT(2) {
+        protected Object doEvaluate(List<Object> values)
+        {
+            return intValue(values.get(0) ) << intValue( values.get(1) );
+        }
+    },
+    SHIFT_RIGHT(2) {
+        protected Object doEvaluate(List<Object> values)
+        {
+            return intValue(values.get(0) ) >> intValue( values.get(1) );
+        }
+    },
+    BITWISE_AND(2) {
+        protected Object doEvaluate(List<Object> values)
+        {
+            return intValue(values.get(0) ) & intValue( values.get(1) );
+        }
+    },
+    BITWISE_OR(2) {
+        protected Object doEvaluate(List<Object> values)
+        {
+            return intValue(values.get(0) ) | intValue( values.get(1) );
+        }
+    },
+    BITWISE_XOR(2) {
+        protected Object doEvaluate(List<Object> values)
+        {
+            return intValue(values.get(0) ) ^ intValue( values.get(1) );
+        }
+    },
+    BITWISE_NEGATION(1) {
+        @Override
+        protected Object doEvaluate(List<Object> values)
+        {
+            return ~intValue( values.get(0) );
+        }
+    },
     UNARY_MINUS(1) {
         @Override
         public Object doEvaluate(List<Object> values)
@@ -50,6 +87,18 @@ public enum Operator
     public static Operator parseOperator(String s)
     {
         switch( s ) {
+            case "&":
+                return BITWISE_AND;
+            case "|":
+                return BITWISE_OR;
+            case "^":
+                return BITWISE_XOR;
+            case "~":
+                return BITWISE_NEGATION;
+            case ">>":
+                return SHIFT_RIGHT;
+            case "<<":
+                return SHIFT_LEFT;
             case "+":
                 return PLUS;
             case "-":

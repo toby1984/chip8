@@ -15,6 +15,8 @@
  */
 package de.codesourcery.chip8.asm.ast;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -133,5 +135,16 @@ public class ASTNode
     {
         visitor.visit( this, depth );
         children.forEach( c -> c.visitInOrder( visitor, depth+1 ) );
+    }
+
+    public String toPrettyString() {
+        final StringBuilder buffer = new StringBuilder();
+        visitInOrder( (node,depth) -> {
+           buffer.
+                   append( StringUtils.repeat( "  ", depth ) )
+                   .append( " - " ).append( node.toString() );
+           buffer.append("\n");
+        });
+        return buffer.toString();
     }
 }

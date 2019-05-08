@@ -109,7 +109,111 @@ public class Parser
 
     public ASTNode parseExpression()
     {
-        return parseAddition();
+        return parseBitwiseOr();
+    }
+
+    private ASTNode parseBitwiseOr()
+    {
+        final ASTNode operand0 = parseBitwiseXor();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.BITWISE_OR )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseBitwiseXor();
+                    if ( operand1 == null ) {
+                        throw new RuntimeException("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
+    }
+
+    private ASTNode parseBitwiseXor()
+    {
+        final ASTNode operand0 = parseBitwiseAnd();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.BITWISE_XOR )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseBitwiseAnd();
+                    if ( operand1 == null ) {
+                        throw new RuntimeException("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
+    }
+
+    private ASTNode parseBitwiseAnd()
+    {
+        final ASTNode operand0 = parseBitshift();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.BITWISE_AND )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseBitshift();
+                    if ( operand1 == null ) {
+                        throw new RuntimeException("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
+    }
+
+    private ASTNode parseBitshift()
+    {
+        final ASTNode operand0 = parseAddition();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.SHIFT_LEFT|| op == Operator.SHIFT_RIGHT )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseAddition();
+                    if ( operand1 == null ) {
+                        throw new RuntimeException("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
     }
 
     private ASTNode parseAddition()
@@ -148,7 +252,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
      */
     private ASTNode parseMultiplication()
     {
-        final ASTNode operand0 = parseUnary();
+        final ASTNode operand0 = parseBitwiseNegation();
         if ( operand0 != null )
         {
             Token tok = lexer.peek();
@@ -158,7 +262,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 if ( op == Operator.MULTIPLY || op == Operator.DIVIDE )
                 {
                     tok = lexer.next();
-                    ASTNode operand1 = parseUnary();
+                    ASTNode operand1 = parseBitwiseNegation();
                     if ( operand1 == null ) {
                         throw new RuntimeException("Expected an argument but got "+lexer.peek());
                     }
@@ -186,6 +290,22 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             return op;
         }
         return parseOperand();
+    }
+
+    private ASTNode parseBitwiseNegation()
+    {
+        if ( lexer.peek().is(TokenType.OPERATOR) && "~".equals( lexer.peek().value ) )
+        {
+            final Token tok = lexer.next();
+            OperatorNode op = new OperatorNode(Operator.BITWISE_NEGATION,tok.region());
+            final ASTNode operand = parseBitwiseNegation();
+            if ( operand == null ) {
+                throw new RuntimeException("Expected an argument after unary minus @ "+lexer.peek());
+            }
+            op.add( operand );
+            return op;
+        }
+        return parseUnary();
     }
 
     private ASTNode parseOperand()

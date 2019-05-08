@@ -19,11 +19,12 @@ Maven 3.x, JDK 11+
   - Complete CHIP-8 emulation
 - Debugger
   - single stepping
-  - step over subroutine call
+  - step over subroutine calls
   - unconditional breakpoints (just click on line in debugger window)
 - Assembler
   - Instruction as described in http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
   - Syntax highlighting
+  - Support for expressions with parentheses and the following operators: - + * / >> << | & ^
   - Support for hexadecimal (0x1234), decimal (1234) and binary (%101101) number literals
   - Support for global ( label: ) and local ( .label) labels
     Labels must not be a reserved word, start with a digit and otherwise contain only digits,letters or underscores

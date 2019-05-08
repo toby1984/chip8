@@ -22,6 +22,36 @@ public class ExpressionEvaluatorTest
     }
 
     @Test
+    public void testBitwiseXor() {
+        assertEquals( 0b101 ^ 0b010, ExpressionEvaluator.evaluate( parse( "%101 ^ %010" ), context, true ) );
+    }
+
+    @Test
+    public void testBitwiseAnd() {
+        assertEquals( 0b111 & 0b010, ExpressionEvaluator.evaluate( parse( "%111 & %010" ), context, true ) );
+    }
+
+    @Test
+    public void testBitwiseOr() {
+        assertEquals( 0b101 | 0b010, ExpressionEvaluator.evaluate( parse( "%101 | %010" ), context, true ) );
+    }
+
+    @Test
+    public void testShiftLeft() {
+        assertEquals( 4<<2, ExpressionEvaluator.evaluate( parse( "4<<2" ), context, true ) );
+    }
+
+    @Test
+    public void testShiftRight() {
+        assertEquals( 8>>2, ExpressionEvaluator.evaluate( parse( "8>>2" ), context, true ) );
+    }
+
+    @Test
+    public void testBitwiseNegation() {
+        assertEquals( ~-1, ExpressionEvaluator.evaluate( parse( "~-1" ), context, true ) );
+    }
+
+    @Test
     public void testOperatorPrecedence()
     {
         assertEquals(9, ExpressionEvaluator.evaluate( parse( "(1+2)*3" ), context, true ) );
@@ -38,6 +68,8 @@ public class ExpressionEvaluatorTest
 
     private ASTNode parse(String s)
     {
-        return new Parser( new Lexer( new Scanner( s ) ) ).parseExpression();
+        final ASTNode ast = new Parser( new Lexer( new Scanner( s ) ) ).parseExpression();
+        System.out.println( ast.toPrettyString() );
+        return ast;
     }
 }

@@ -105,10 +105,36 @@ public final class Lexer
             }
             switch( c )
             {
+                case '>':
+                    int start = scanner.offset();
+                    scanner.next();
+                    if ( scanner.eof() || scanner.peek() != '>' ) {
+                        scanner.back();
+                        break;
+                    }
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.OPERATOR, ">>", start ) );
+                    return;
+                case '<':
+                    start = scanner.offset();
+                    scanner.next();
+                    if ( scanner.eof() || scanner.peek() != '<' ) {
+                        scanner.back();
+                        break;
+                    }
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.OPERATOR, "<<", start ) );
+                    return;
                 case '+':
                 case '-':
                 case '*':
+                case '~':
                 case '/':
+                case '&':
+                case '|':
+                case '^':
                     parseBuffer(startOffset);
                     scanner.next();
                     tokens.add( new Token( TokenType.OPERATOR, c, scanner.offset() ) );
