@@ -73,7 +73,8 @@ public class ParserTest extends TestCase
     }
 
     private ASTNode parse(String source) {
-        Parser p = new Parser( new Lexer( new Scanner( source ) ) );
+        final Lexer lexer = new Lexer( new Scanner( source ) );
+        Parser p = new Parser( lexer, new Assembler.CompilationContext( new ExecutableWriter() ) );
         return p.parse();
     }
 }

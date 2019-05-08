@@ -18,7 +18,7 @@ public class ExpressionEvaluatorTest
     @Before
     public void setup()
     {
-        context = new Assembler.CompilationContext( new ByteArrayOutputStream() );
+        context = new Assembler.CompilationContext( new ExecutableWriter(new ByteArrayOutputStream()) );
     }
 
     @Test
@@ -68,7 +68,8 @@ public class ExpressionEvaluatorTest
 
     private ASTNode parse(String s)
     {
-        final ASTNode ast = new Parser( new Lexer( new Scanner( s ) ) ).parseExpression();
+        final Lexer lexer = new Lexer( new Scanner( s ) );
+        final ASTNode ast = new Parser( lexer, new Assembler.CompilationContext( new ExecutableWriter() ) ).parseExpression();
         System.out.println( ast.toPrettyString() );
         return ast;
     }

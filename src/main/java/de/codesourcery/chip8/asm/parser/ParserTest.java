@@ -15,6 +15,8 @@
  */
 package de.codesourcery.chip8.asm.parser;
 
+import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.asm.ExecutableWriter;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 
 import javax.swing.JButton;
@@ -104,7 +106,8 @@ public class ParserTest extends JFrame
     {
         try
         {
-            final Parser p = new Parser( new Lexer( new Scanner( src.getText() ) ) );
+            final Lexer lexer = new Lexer( new Scanner( src.getText() ) );
+            final Parser p = new Parser( lexer , new Assembler.CompilationContext( new ExecutableWriter() ) );
             final ASTNode ast = p.parse();
             astTree.setModel( new TreeModel()
             {

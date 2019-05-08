@@ -93,9 +93,8 @@ public class AssemblerTest
 
     private byte[] assemble(String source) throws IOException
     {
-
         final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        Assembler.assemble( source, out );
+        new Assembler().assemble( source, 0x200, new ExecutableWriter( out ) );
         return out.toByteArray();
     }
 }

@@ -46,10 +46,20 @@ import java.util.stream.Stream;
 public class Parser
 {
     private final Lexer lexer;
+    private final Assembler.CompilationContext context;
 
-    public Parser(Lexer lexer)
+    protected static final class ParseException extends RuntimeException {
+
+        public ParseException(String message)
+        {
+            super( message );
+        }
+    }
+
+    public Parser(Lexer lexer, Assembler.CompilationContext context)
     {
         this.lexer = lexer;
+        this.context = context;
     }
 
     public ASTNode parse() {
@@ -64,6 +74,18 @@ public class Parser
         }
     }
 
+    private void error(String message)
+    {
+        context.error(message, lexer.peek().offset );
+        throw new ParseException(message);
+    }
+
+    private void error(String message,Token token)
+    {
+        context.error(message, token );
+        throw new ParseException(message);
+    }
+
     private ASTNode internalParse() {
 
         final ASTNode ast = new ASTNode();
@@ -74,12 +96,27 @@ public class Parser
             }
             if ( ! lexer.eof() )
             {
-                ASTNode stmt = parseStatement();
-                if (stmt == null)
+                final ASTNode stmt;
+                try
                 {
-                    throw new RuntimeException("Parse error");
+                    stmt = parseStatement();
+                    if (stmt == null)
+                    {
+                        error("No statement on this line?");
+                    }
+                    ast.add(stmt);
                 }
-                ast.add(stmt);
+                catch(Exception e)
+                {
+                    if ( !(e instanceof ParseException) ) {
+                        context.error("Internal error - "+e.getMessage(),lexer.peek().offset);
+                    }
+                    printError( e.getMessage(), lexer.peek().offset );
+                    // crude error recovery - just advance to next line and hope for the best
+                    while (!lexer.eof() && ! lexer.peek().is(TokenType.NEWLINE)) {
+                        lexer.next();
+                    }
+                }
             }
         }
         return ast;
@@ -102,7 +139,7 @@ public class Parser
         }
         if ( statement.children.isEmpty() )
         {
-            throw new RuntimeException("Empty statement @ "+lexer.peek().offset);
+            error("Statement node has no children?");
         }
         return statement;
     }
@@ -126,7 +163,7 @@ public class Parser
                     tok = lexer.next();
                     ASTNode operand1 = parseBitwiseXor();
                     if ( operand1 == null ) {
-                        throw new RuntimeException("Expected an argument");
+                        error("Expected an argument");
                     }
                     final OperatorNode opNode = new OperatorNode(op, tok.region() );
                     opNode.add( operand0 );
@@ -152,7 +189,7 @@ public class Parser
                     tok = lexer.next();
                     ASTNode operand1 = parseBitwiseAnd();
                     if ( operand1 == null ) {
-                        throw new RuntimeException("Expected an argument");
+                        error("Expected an argument");
                     }
                     final OperatorNode opNode = new OperatorNode(op, tok.region() );
                     opNode.add( operand0 );
@@ -178,7 +215,7 @@ public class Parser
                     tok = lexer.next();
                     ASTNode operand1 = parseBitshift();
                     if ( operand1 == null ) {
-                        throw new RuntimeException("Expected an argument");
+                        error("Expected an argument");
                     }
                     final OperatorNode opNode = new OperatorNode(op, tok.region() );
                     opNode.add( operand0 );
@@ -204,7 +241,7 @@ public class Parser
                     tok = lexer.next();
                     ASTNode operand1 = parseAddition();
                     if ( operand1 == null ) {
-                        throw new RuntimeException("Expected an argument");
+                        error("Expected an argument");
                     }
                     final OperatorNode opNode = new OperatorNode(op, tok.region() );
                     opNode.add( operand0 );
@@ -230,7 +267,7 @@ public class Parser
                     tok = lexer.next();
                     ASTNode operand1 = parseMultiplication();
                     if ( operand1 == null ) {
-                        throw new RuntimeException("Expected an argument");
+                        error("Expected an argument");
                     }
                     final OperatorNode opNode = new OperatorNode(op, tok.region() );
                     opNode.add( operand0 );
@@ -264,7 +301,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                     tok = lexer.next();
                     ASTNode operand1 = parseBitwiseNegation();
                     if ( operand1 == null ) {
-                        throw new RuntimeException("Expected an argument but got "+lexer.peek());
+                        error("Expected an argument");
                     }
                     final OperatorNode opNode = new OperatorNode(op, tok.region() );
                     opNode.add( operand0 );
@@ -284,7 +321,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             OperatorNode op = new OperatorNode(Operator.UNARY_MINUS,tok.region());
             final ASTNode operand = parseUnary();
             if ( operand == null ) {
-                throw new RuntimeException("Expected an argument after unary minus @ "+lexer.peek());
+                error("Expected an argument");
             }
             op.add( operand );
             return op;
@@ -300,7 +337,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             OperatorNode op = new OperatorNode(Operator.BITWISE_NEGATION,tok.region());
             final ASTNode operand = parseBitwiseNegation();
             if ( operand == null ) {
-                throw new RuntimeException("Expected an argument after unary minus @ "+lexer.peek());
+                error("Expected an argument");
             }
             op.add( operand );
             return op;
@@ -346,10 +383,10 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             tok = lexer.next();
             final ASTNode result = parseExpression();
             if ( result == null ) {
-                throw new IllegalArgumentException( "Missing input after opening parentheses @ "+lexer.peek() );
+                error( "Missing input after opening parentheses");
             }
             if ( ! lexer.peek().is(TokenType.PARENS_CLOSE ) ) {
-                throw new IllegalArgumentException( "Missing closing parentheses @ "+lexer.peek() );
+                error( "Missing closing parentheses");
             }
             final TextRegion region = tok.region();
             region.merge( lexer.next().region() );
@@ -420,7 +457,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                     }
                 }
                 if ( required ) {
-                    throw new RuntimeException("Expected operand after comma @ "+lexer.peek().offset);
+                    error("Expected operand after comma");
                 }
                 return insn;
             }
@@ -434,7 +471,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
         {
             final Token dot = lexer.next();
             if ( ! lexer.peek().is(TokenType.TEXT) ) {
-                throw new RuntimeException("Expected a directive @ "+lexer.peek());
+                error("Expected a directive");
             }
             final Token directiveTok = lexer.next();
             TextRegion directiveRegion = directiveTok.region();
@@ -447,7 +484,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                     result = new DirectiveNode( DirectiveNode.Type.RESERVE, directiveRegion);
                     ASTNode node = parseExpression();
                     if ( node == null ) {
-                        throw new RuntimeException("Missing parameter @ "+lexer.peek());
+                        error("Missing argument");
                     }
                     result.add( node );
                     return result;
@@ -463,7 +500,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                         node = parseExpression();
                         if ( node == null ) {
                             if ( valueRequired ) {
-                                throw new RuntimeException("Expected a value @ "+lexer.peek());
+                                error("Expected a value");
                             }
                             break;
                         }
@@ -478,54 +515,54 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 case "origin": // .origin 0x1234
                     ASTNode address = parseExpression();
                     if ( address == null ) {
-                        throw new RuntimeException("Expected an argument");
+                        error("Expected an argument");
                     }
                     result = new DirectiveNode( DirectiveNode.Type.ORIGIN, directiveRegion );
                     result.add( address );
                     return result;
                 case "alias": // .alias v0 = x
                     if ( ! lexer.peek().is( TokenType.REGISTER ) ) {
-                        throw new RuntimeException("Expected a register name (v0...v15) but got "+lexer.peek());
+                        error("Expected a register name (v0...v15) but got "+lexer.peek());
                     }
                     result = new DirectiveNode( DirectiveNode.Type.ALIAS, directiveRegion );
                     final Token registerToken = lexer.next();
                     final int regNum = Integer.parseInt( registerToken.value.substring( 1 ) );
                     result.add( new RegisterNode( regNum , registerToken.region() ) );
                     if ( ! lexer.peek().is(TokenType.EQUALS) ) {
-                        throw new RuntimeException("Expected an '=' character but got "+lexer.peek());
+                        error("Expected an '=' character but got "+lexer.peek());
                     }
                     lexer.next(); // consume '='
 
                     ASTNode value = parseIdentifier();
                     if ( value == null ) {
-                        throw new RuntimeException("Expected an identifier but got "+lexer.peek());
+                        error("Expected an identifier but got "+lexer.peek());
                     }
                     result.add( value );
                     return result;
                 case "equ": // .equ a = b
                     if ( ! Identifier.isValid( lexer.peek().value ) ) {
-                        throw new RuntimeException("Expected an identifier but got "+lexer.peek());
+                        error("Expected an identifier but got "+lexer.peek());
                     }
                     result = new DirectiveNode( DirectiveNode.Type.EQU, directiveRegion );
 
                     ASTNode identifier = parseIdentifier();
                     if ( identifier == null ) {
-                        throw new RuntimeException("Expected an identifier but got "+lexer.peek());
+                        error("Expected an identifier but got "+lexer.peek());
                     }
                     result.add( identifier );
                     if ( ! lexer.peek().is(TokenType.EQUALS) ) {
-                        throw new RuntimeException("Expected an '=' character but got "+lexer.peek());
+                        error("Expected an '=' character but got "+lexer.peek());
                     }
                     lexer.next(); // consume '='
 
                     value = parseExpression();
                     if ( value == null ) {
-                        throw new RuntimeException("Expected an expression but got "+lexer.peek());
+                        error("Expected an expression but got "+lexer.peek());
                     }
                     result.add( value );
                     return result;
             }
-            throw new RuntimeException("Unrecognized directive @ "+directiveTok);
+            error("Unrecognized directive @ "+directiveTok);
         }
         return null;
     }
@@ -536,7 +573,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
         if ( tok.is( TokenType.IDENTIFIER ) ) {
             lexer.next();
             if (Identifier.isReserved( tok.value ) ) {
-                throw new RuntimeException("'"+tok.value+"' is a reserved identifier and cannot be used here : "+tok);
+                error("'"+tok.value+"' is a reserved identifier and cannot be used here : "+tok);
             }
             return new IdentifierNode( Identifier.of( tok.value ), tok.region() );
         }
@@ -696,14 +733,14 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                     @Override
                     public void compile(InstructionNode instruction, Assembler.CompilationContext context)
                     {
-                        context.writeWord( this, 0x1000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) ) );
+                        context.writeWord( this, 0x1000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) , instruction, context ) );
                     }
                 },
         CALL("call",OperandType.ADDRESS) {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
-                context.writeWord( this,0x2000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ) ) );
+                context.writeWord( this,0x2000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ), instruction, context ) );
             }
         },
         SE("se",OperandType.REGISTER,OperandType.BYTE) {
@@ -711,8 +748,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 3xkk - SE Vx, byte
-                int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
+                int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x3000 | regNo << 8 | cnst );
             }
         },
@@ -721,8 +758,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 4xkk - SE Vx, byte
-                int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
+                int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x4000 | regNo << 8 | cnst );
             }
         },
@@ -731,8 +768,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 5xy0 - SE Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x5000 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -741,8 +778,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 6xkk - LD Vx, byte
-                int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
+                int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x6000 | regNo << 8 | cnst );
             }
         },
@@ -751,8 +788,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 7xkk - ADD Vx, byte
-                int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
+                int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x7000 | regNo << 8 | cnst );
             }
         },
@@ -761,8 +798,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xy0 - LD Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x8000 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -771,8 +808,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xy1 - OR Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x8001 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -781,8 +818,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xy2 - AND Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x8002 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -791,8 +828,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xy3 - XOR Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x8003 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -801,8 +838,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xy4 - ADD Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x8004 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -811,8 +848,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xy5 - SUB Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x8005 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -821,8 +858,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xy6 - SHR Vx,Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x8006 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -831,8 +868,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xy7 - SUBN Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x8007 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -841,8 +878,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xyE - SHL Vx,Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x800e | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -851,8 +888,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 9xy0 - SNE Vx, Vy
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x9000 | regNo0 << 8 | regNo1 << 4);
             }
         },
@@ -861,7 +898,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Annn - LD I, addr
-                int cnst = assertIn12BitRange( evaluate( instruction.child(1), context ) );
+                int cnst = assertIn12BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xA000 | cnst );
             }
         },
@@ -870,7 +907,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Bnnn - JP V0, addr
-                int cnst = assertIn12BitRange( evaluate( instruction.child(1), context ) );
+                int cnst = assertIn12BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xB000 | cnst );
             }
         },
@@ -879,8 +916,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Cxkk - RND Vx, byte
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xc000 | regNo0 << 8 | cnst );
             }
         },
@@ -889,9 +926,9 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Dxyn - DRW Vx, Vy, nibble
-                int x = assertIn4BitRange( evaluate( instruction.child(0), context ) );
-                int y = assertIn4BitRange( evaluate( instruction.child(1), context ) );
-                int h = assertIn4BitRange( evaluate( instruction.child(2), context ) );
+                int x = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int y = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
+                int h = assertIn4BitRange( evaluate( instruction.child(2), context ), instruction, context );
                 context.writeWord(this, 0xd000 | x << 8 | y << 4 | h);
             }
         },
@@ -900,7 +937,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Ex9E - SKP Vx
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
                 context.writeWord(this, 0xe09e | regNo0 << 8 );
             }
         },
@@ -909,7 +946,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // ExA1 - SKNP Vx
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
                 context.writeWord(this, 0xe0a1 | regNo0 << 8 );
             }
         },
@@ -918,7 +955,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx07 - LD Vx, DT
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
                 context.writeWord(this, 0xf007 | regNo0 << 8 );
             }
         },
@@ -927,7 +964,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx0A - LD Vx, K
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
                 context.writeWord(this, 0xf00a | regNo0 << 8 );
             }
         },
@@ -936,7 +973,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx15 - LD DT, Vx
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xf015 | regNo0 << 8 );
             }
         },
@@ -945,7 +982,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx18 - LD ST, Vx
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xf018 | regNo0 << 8 );
             }
         },
@@ -954,7 +991,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx1E - ADD I, Vx
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xf01e | regNo0 << 8 );
             }
         },
@@ -963,7 +1000,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx29 - LD F, Vx
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xf029 | regNo0 << 8 );
             }
         },
@@ -972,7 +1009,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx33 - LD B, Vx
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xf033 | regNo0 << 8 );
             }
         },
@@ -981,7 +1018,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx55 - LD [I], Vx
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0xf055 | regNo0 << 8 );
             }
         },
@@ -990,7 +1027,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // Fx65 - LD Vx, [I]
-                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ) );
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
                 context.writeWord(this, 0xf065 | regNo0 << 8 );
             }
         };
@@ -1017,26 +1054,26 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             throw new IllegalArgumentException( "Operand no. out-of-range: "+no );
         }
 
-        protected int assertIn12BitRange(int value)
+        protected int assertIn12BitRange(int value,ASTNode node, Assembler.CompilationContext context)
         {
             if ( value < 0 || value > 0xfff) {
-                throw new IllegalArgumentException( "Value not in 12-bit range: 0x"+Integer.toHexString( value ) );
+                context.error( "Value not in 12-bit range: 0x"+Integer.toHexString( value ), node );
             }
             return value;
         }
 
-        protected int assertIn8BitRange(int value)
+        protected int assertIn8BitRange(int value, ASTNode node, Assembler.CompilationContext context)
         {
             if ( value < 0 || value > 0xff) {
-                throw new IllegalArgumentException( "Value not in 8-bit range: 0x"+Integer.toHexString( value ) );
+                context.error( "Value not in 8-bit range: 0x"+Integer.toHexString( value ), node );
             }
             return value;
         }
 
-        protected int assertIn4BitRange(int value)
+        protected int assertIn4BitRange(int value,ASTNode node, Assembler.CompilationContext context)
         {
             if ( value < 0 || value > 0b1111) {
-                throw new IllegalArgumentException( "Value not in 4-bit range: 0x"+Integer.toHexString( value ) );
+                context.error( "Value not in 4-bit range: 0x"+Integer.toHexString( value ),node );
             }
             return value;
         }

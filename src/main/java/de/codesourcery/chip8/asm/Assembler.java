@@ -21,11 +21,12 @@ import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
 import de.codesourcery.chip8.asm.ast.RegisterNode;
+import de.codesourcery.chip8.asm.ast.TextRegion;
 import de.codesourcery.chip8.asm.parser.Lexer;
 import de.codesourcery.chip8.asm.parser.Parser;
 import de.codesourcery.chip8.asm.parser.Scanner;
+import de.codesourcery.chip8.asm.parser.Token;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.Validate;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -33,6 +34,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.time.ZonedDateTime;
 
 /**
  * Crude CHIP-8 assembler.
@@ -43,6 +45,13 @@ public class Assembler
 {
     private CompilationContext compilationContext;
 
+    public static final class NOPOutputStream extends OutputStream {
+
+        @Override
+        public void write(int b) throws IOException
+        {
+        }
+    }
     public static void main(String[] args) throws IOException
     {
         if ( args.length != 2 )
@@ -55,7 +64,7 @@ public class Assembler
             throw new RuntimeException( "Source file does not exist: " + src.getAbsolutePath() );
         }
         final File out = new File( args[1] );
-        assemble( src, out );
+        Assembler.assemble( src, out );
     }
 
     /**
@@ -66,7 +75,7 @@ public class Assembler
      * @return number of bytes written to the output stream
      * @throws IOException
      */
-    public static int assemble(File src, File out) throws IOException
+    public static void assemble(File src, File out) throws IOException
     {
         if ( !src.exists() )
         {
@@ -74,44 +83,59 @@ public class Assembler
         }
 
         final String srcCode = new String( Files.readAllBytes( src.toPath() ) );
-        return assemble( srcCode, new FileOutputStream( out ) );
+        final ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+        try ( final ExecutableWriter writer = new ExecutableWriter( outStream ) )
+        {
+            final CompilationContext ctx = new Assembler().assemble( srcCode, 0x200, writer );
+
+            for (CompilationMessages.CompilationMessage msg : ctx.messages.getSorted() ) {
+                System.out.println( msg );
+            }
+            if ( ctx.messages.hasErrors() )
+            {
+                System.exit(1);
+            }
+            else
+            {
+                try ( FileOutputStream fOut = new FileOutputStream( out ) ) {
+                    fOut.write( outStream.toByteArray() );
+                }
+                System.out.println("Wrote "+writer.getBytesWritten()+" bytes.");
+                System.exit( 0 );
+            }
+        }
     }
 
     /**
      * Compile source from a string and write it to an {@link OutputStream}.
      *
-     * @param srcCode source to compile
+     * @param source source to compile
      * @param out     output stream to write binary to
-     * @return number of bytes written to the output stream
-     * @throws IOException
+     * @return compilation context with (error) messages, symbol table etc.
      */
-    public static int assemble(String srcCode, OutputStream out) throws IOException
+    public CompilationContext assemble(String source, int startAddress,ExecutableWriter out)
     {
-        Validate.notNull( srcCode, "srcCode must not be null" );
-        Validate.notNull( out, "out must not be null" );
+        final CompilationContext ctx = new CompilationContext( out );
+        assemble(source,ctx,startAddress);
+        return ctx;
+    }
 
-        final Parser p = new Parser( new Lexer( new Scanner( srcCode ) ) );
+    private void assemble(String source, CompilationContext context, int startAddress)
+    {
+        context.info("Compilation started @ "+ ZonedDateTime.now(),0 );
+        compilationContext = context;
+        compilationContext.currentAddress = startAddress;
+
+        // parse
+        final Lexer lexer = new Lexer( new Scanner( source ) );
+        final Parser p = new Parser( lexer, context );
         final ASTNode ast = p.parse();
+
         System.out.println( "---- AST ---\n" );
         ast.visitInOrder( (node, depth) ->
         {
             System.out.println( StringUtils.repeat( ' ', depth ) + " " + node );
-        } );
-        final byte[] binary = new Assembler().assemble( ast, 0x200 );
-
-        try (out)
-        {
-            out.write( binary );
-        }
-        System.out.println( "Wrote " + binary.length + " bytes." );
-        return binary.length;
-    }
-
-    private byte[] assemble(ASTNode ast, int startAddress)
-    {
-        final ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        compilationContext = new CompilationContext( bos );
-        compilationContext.currentAddress = startAddress;
+        });
 
         // assign addresses to labels
         ast.visitInOrder( new AssignSymbolsPhase() );
@@ -119,19 +143,25 @@ public class Assembler
         // now generate binary
         compilationContext.currentAddress = startAddress;
         ast.visitInOrder( new GenerateCodePhase() );
-        return bos.toByteArray();
+
+        if ( ! compilationContext.messages.hasErrors() ) {
+            context.error("Compilation finished with errors ",0 );
+        } else {
+            context.info("Compilation finished",0 );
+        }
     }
 
     public static final class CompilationContext
     {
         public final SymbolTable symbolTable = new SymbolTable();
-        final OutputStream executable;
-        public Identifier lastGlobalLabel = SymbolTable.GLOBAL_SCOPE;
+        public final ExecutableWriter outputWriter;
+        Identifier lastGlobalLabel = SymbolTable.GLOBAL_SCOPE;
+        public final CompilationMessages messages = new CompilationMessages();
         int currentAddress;
 
-        CompilationContext(OutputStream executable)
+        public CompilationContext(ExecutableWriter writer)
         {
-            this.executable = executable;
+            this.outputWriter= writer;
         }
 
         public Identifier getLastGlobalLabel()
@@ -144,11 +174,59 @@ public class Assembler
             return StringUtils.leftPad( Integer.toHexString( value ), 4, '0' );
         }
 
+        public void info(String message, int offset) {
+            messages.info(message, offset);
+        }
+
+        public void info(String message, TextRegion region) {
+            messages.info(message, region );
+        }
+
+        public void info(String message, ASTNode node) {
+            messages.info(message, node );
+        }
+
+        public void info(String message, Token token) {
+            messages.info(message, token );
+        }
+
+        public void warn(String message, int offset) {
+            messages.warn(message, offset);
+        }
+
+        public void warn(String message,TextRegion region) {
+            messages.warn(message, region );
+        }
+
+        public void warn(String message,ASTNode node) {
+            messages.warn(message, node );
+        }
+
+        public void warn(String message,Token token) {
+            messages.warn(message, token );
+        }
+
+        public void error(String message, int offset) {
+            messages.error(message, offset);
+        }
+
+        public void error(String message,TextRegion region) {
+            messages.warn(message, region );
+        }
+
+        public void error(String message,ASTNode node) {
+            messages.warn(message, node );
+        }
+
+        public void error(String message,Token token) {
+            messages.warn(message, token );
+        }
+
         public void writeByte(int iValue)
         {
             try
             {
-                executable.write( (byte) iValue );
+                outputWriter.writeByte( iValue );
                 currentAddress += 1;
             }
             catch (IOException e)
@@ -175,13 +253,18 @@ public class Assembler
                 } else {
                     System.out.println( hex( currentAddress ) + ": " + hex( word ) );
                 }
-                executable.write( (word & 0xff00) >>> 8 );
-                executable.write( (word & 0xff) );
+                outputWriter.writeByte( (word & 0xff00) >>> 8 );
+                outputWriter.writeByte( (word & 0xff) );
                 currentAddress += 2;
             } catch (IOException e)
             {
                 throw new RuntimeException( "Failed to write binary", e );
             }
+        }
+
+        public boolean hasErrors()
+        {
+            return messages.hasErrors();
         }
     }
 

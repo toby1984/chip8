@@ -17,6 +17,7 @@ package de.codesourcery.chip8.ui;
 
 import de.codesourcery.chip8.Disassembler;
 import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.asm.ExecutableWriter;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
@@ -970,7 +971,9 @@ public class MainFrame extends JFrame
                                     if ( text != null )
                                     {
                                         documentChangeListenerEnabled = false;
-                                        final Parser p = new Parser(new Lexer(new Scanner(text)));
+                                        final Assembler.CompilationContext ctx =
+                                                new Assembler.CompilationContext(new ExecutableWriter());
+                                        final Parser p = new Parser(new Lexer(new Scanner(text)), ctx);
                                         final ASTNode ast;
                                         try
                                         {
@@ -1142,22 +1145,29 @@ public class MainFrame extends JFrame
                 messagesChanged();
 
                 final ByteArrayOutputStream out = new ByteArrayOutputStream();
-
+                final ExecutableWriter writer = new ExecutableWriter(out);
                 msg("Compilation started.");
                 try
                 {
-                    final int bytesWritten = Assembler.assemble(source.getText(), out);
-                    msg("Compilation succeeded ("+bytesWritten+" bytes)");
-                    driver.runOnThread(cb -> {
-                        final Consumer<Emulator> hook = ip ->
-                        {
-                            final byte[] data = out.toByteArray();
-                            System.out.println("Loading compiled code ("+data.length+" bytes)");
-                            ip.memory.write(0x200, data);
-                        };
-                        cb.emulator.setResetHook(hook);
-                    });
-                    driver.reset();
+                    final Assembler.CompilationContext ctx = new Assembler().assemble( source.getText(), 0x200, writer );
+                    final int bytesWritten = writer.getBytesWritten();
+                    if ( ctx.hasErrors() ) {
+                        msg( "Compilation failed");
+                    }
+                    else
+                    {
+                        msg( "Compilation succeeded (" + bytesWritten + " bytes)" );
+                        driver.runOnThread(cb -> {
+                            final Consumer<Emulator> hook = ip ->
+                            {
+                                final byte[] data = out.toByteArray();
+                                System.out.println("Loading compiled code ("+data.length+" bytes)");
+                                ip.memory.write(0x200, data);
+                            };
+                            cb.emulator.setResetHook(hook);
+                        });
+                        driver.reset();
+                    }
                 }
                 catch (Exception e)
                 {
