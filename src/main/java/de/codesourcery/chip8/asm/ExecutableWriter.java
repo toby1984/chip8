@@ -32,6 +32,7 @@ public class ExecutableWriter implements Closeable, AutoCloseable
     public void writeByte(int value) throws IOException
     {
         out.write( value );
+        bytesWritten++;
     }
 
     public int getBytesWritten()

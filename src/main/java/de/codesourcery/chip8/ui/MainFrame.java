@@ -17,6 +17,7 @@ package de.codesourcery.chip8.ui;
 
 import de.codesourcery.chip8.Disassembler;
 import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.asm.CompilationMessages;
 import de.codesourcery.chip8.asm.ExecutableWriter;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.IdentifierNode;
@@ -793,17 +794,6 @@ public class MainFrame extends JFrame
 
     private MyFrame createAsmView()
     {
-        class Message
-        {
-            public final ZonedDateTime timestamp = ZonedDateTime.now();
-            public final String text;
-
-            Message(String text)
-            {
-                this.text = text;
-            }
-        }
-
         return new MyFrame("Assembler", ConfigKey.ASM, false,false) {
 
             final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -882,20 +872,21 @@ public class MainFrame extends JFrame
 
 
             private final JTextPane source = new JTextPane();
-            private final List<Message> messages = new ArrayList<>();
+            private final List<CompilationMessages.CompilationMessage> messages = new ArrayList<>();
             private final JTable table = new JTable(new DefaultTableModel()
             {
                 @Override public int getRowCount() { return messages.size(); }
 
                 @Override
-                public int getColumnCount() {return 2;}
+                public int getColumnCount() {return 3;}
 
                 @Override
                 public String getColumnName(int columnIndex)
                 {
                     switch(columnIndex) {
                         case 0: return "Time";
-                        case 1: return "Message";
+                        case 1: return "Severity";
+                        case 2: return "Message";
                     }
                     throw new IllegalArgumentException("Invalid column "+columnIndex);
                 }
@@ -908,7 +899,8 @@ public class MainFrame extends JFrame
                 {
                     switch(columnIndex) {
                         case 0: return formatter.format(messages.get(rowIndex).timestamp );
-                        case 1: return messages.get(rowIndex).text;
+                        case 1: return messages.get(rowIndex).severity.toString();
+                        case 2: return messages.get(rowIndex).message;
                     }
                     throw new IllegalArgumentException("Invalid column "+columnIndex);
                 }
@@ -1131,10 +1123,6 @@ public class MainFrame extends JFrame
                 }
             }
 
-            private void msg(String s) {
-                messages.add( new Message(s) );
-            }
-
             private void messagesChanged() {
                 ((DefaultTableModel) table.getModel()).fireTableDataChanged();
             }
@@ -1142,21 +1130,13 @@ public class MainFrame extends JFrame
             private void compile()
             {
                 messages.clear();
-                messagesChanged();
-
                 final ByteArrayOutputStream out = new ByteArrayOutputStream();
-                final ExecutableWriter writer = new ExecutableWriter(out);
-                msg("Compilation started.");
-                try
+                try (final ExecutableWriter writer = new ExecutableWriter(out))
                 {
                     final Assembler.CompilationContext ctx = new Assembler().assemble( source.getText(), 0x200, writer );
-                    final int bytesWritten = writer.getBytesWritten();
-                    if ( ctx.hasErrors() ) {
-                        msg( "Compilation failed");
-                    }
-                    else
+                    ctx.messages.stream().forEach(messages::add);
+                    if ( ! ctx.hasErrors() )
                     {
-                        msg( "Compilation succeeded (" + bytesWritten + " bytes)" );
                         driver.runOnThread(cb -> {
                             final Consumer<Emulator> hook = ip ->
                             {
@@ -1172,11 +1152,8 @@ public class MainFrame extends JFrame
                 catch (Exception e)
                 {
                     e.printStackTrace();
-                    final StringWriter sWriter = new StringWriter();
-                    e.printStackTrace(new PrintWriter( sWriter ));
-                    msg( sWriter.toString() );
-                    msg("Compilation failed.");
-                } finally {
+                }
+                finally {
                     messagesChanged();
                 }
             }

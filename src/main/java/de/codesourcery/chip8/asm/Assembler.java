@@ -144,10 +144,10 @@ public class Assembler
         compilationContext.currentAddress = startAddress;
         ast.visitInOrder( new GenerateCodePhase() );
 
-        if ( ! compilationContext.messages.hasErrors() ) {
+        if ( compilationContext.messages.hasErrors() ) {
             context.error("Compilation finished with errors ",0 );
         } else {
-            context.info("Compilation finished",0 );
+            context.info("Compilation finished ("+compilationContext.outputWriter.getBytesWritten()+" bytes)",0 );
         }
     }
 
@@ -211,15 +211,15 @@ public class Assembler
         }
 
         public void error(String message,TextRegion region) {
-            messages.warn(message, region );
+            messages.error(message, region );
         }
 
         public void error(String message,ASTNode node) {
-            messages.warn(message, node );
+            messages.error(message, node );
         }
 
         public void error(String message,Token token) {
-            messages.warn(message, token );
+            messages.error(message, token );
         }
 
         public void writeByte(int iValue)
