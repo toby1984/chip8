@@ -34,6 +34,7 @@ import de.codesourcery.chip8.asm.ast.TextNode;
 import de.codesourcery.chip8.asm.ast.TextRegion;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -539,6 +540,21 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                     }
                     result.add( value );
                     return result;
+                case "clearAliases":
+                    result = new DirectiveNode( DirectiveNode.Type.RESERVE, directiveRegion);
+                    node = parseExpression();
+                    if ( node != null )
+                    {
+                        if ( node instanceof RegisterNode || node instanceof IdentifierNode)
+                        {
+                            result.add( node );
+                        } else {
+                            xxx
+                                    // TODO: parseExpressionList()...
+                            error(".clearAliases ")
+                        }
+                    }
+                    return result;
                 case "equ": // .equ a = b
                     if ( ! Identifier.isValid( lexer.peek().value ) ) {
                         error("Expected an identifier but got "+lexer.peek());
@@ -578,6 +594,29 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             return new IdentifierNode( Identifier.of( tok.value ), tok.region() );
         }
         return null;
+    }
+
+    private List<ASTNode> parseExpressionList()
+    {
+        List<ASTNode> result = new ArrayList<>();
+        boolean requiresMore = true;
+        do {
+            ASTNode node = parseExpression();
+            if ( node == null ) {
+                break;
+            }
+            requiresMore = false;
+            result.add( node );
+            if ( ! lexer.peek().is(TokenType.COMMA ) ) {
+                break;
+            }
+            requiresMore = true;
+        } while( true );
+        if ( requiresMore )
+        {
+            error( "Trailing comma" , lexer.peek() );
+        }
+        return result;
     }
 
     private ASTNode parseComment()

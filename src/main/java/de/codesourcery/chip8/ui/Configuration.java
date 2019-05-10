@@ -17,6 +17,10 @@ package de.codesourcery.chip8.ui;
 
 import org.apache.commons.lang3.StringUtils;
 
+import javax.swing.text.Style;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Point;
@@ -36,9 +40,38 @@ public final class Configuration
     private final Properties props;
     private MainFrame.ConfigKey configKey;
 
+    public enum HighlightingColors {
+        DIRECTIVE("color_directive",Color.ORANGE.darker()),
+        COMMENT("color_comment",Color.LIGHT_GRAY),
+        INSTRUCTION("color_instruction",Color.BLUE),
+        IDENTIFIER("color_identifier", Color.GREEN.darker()),
+        REGISTER("color_register", Color.MAGENTA),
+        TEXT("color_text", Color.BLACK );
+
+        public final String propertyName;
+        public final Color defaultColor;
+
+        HighlightingColors(String propertyName,Color defaultColor)
+        {
+            this.propertyName = propertyName;
+            this.defaultColor = defaultColor;
+        }
+
+        public Style getStyle(StyledDocument document)
+        {
+            return document.getStyle( propertyName );
+        }
+    }
+
     private Configuration(Properties props, MainFrame.ConfigKey configKey) {
         this.props = props;
         this.configKey = configKey;
+    }
+
+    public Style addStyle(HighlightingColors color, StyledDocument document) {
+        final Style style = document.addStyle( color.propertyName, null );
+        StyleConstants.setForeground(style, getColor( color  ));
+        return style;
     }
 
     public static Configuration of(Properties props) {
@@ -151,6 +184,19 @@ public final class Configuration
 
     public void setLastSource(File file) {
         setFile("source",file);
+    }
+
+    public Color getColor(HighlightingColors key) {
+        final String value = getProperty( key.propertyName );
+        if ( StringUtils.isBlank( value ) ) {
+            return key.defaultColor;
+        }
+        return new Color( Integer.parseInt( value.trim(), 16 ) );
+    }
+
+    public void setColor(HighlightingColors key,Color color)
+    {
+        setProperty( key.propertyName, StringUtils.leftPad( Integer.toHexString( color.getRGB() ), 8, '0' ) );
     }
 
     public static void saveWindowState(Properties props, MainFrame.ConfigKey configKey, Component comp)

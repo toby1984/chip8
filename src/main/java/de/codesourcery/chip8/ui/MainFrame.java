@@ -20,6 +20,8 @@ import de.codesourcery.chip8.asm.Assembler;
 import de.codesourcery.chip8.asm.CompilationMessages;
 import de.codesourcery.chip8.asm.ExecutableWriter;
 import de.codesourcery.chip8.asm.ast.ASTNode;
+import de.codesourcery.chip8.asm.ast.CommentNode;
+import de.codesourcery.chip8.asm.ast.DirectiveNode;
 import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
@@ -54,7 +56,6 @@ import javax.swing.JTextField;
 import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import javax.swing.border.Border;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.DocumentEvent;
@@ -89,13 +90,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.nio.file.Files;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -104,7 +101,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -930,45 +926,26 @@ public class MainFrame extends JFrame
                         public void valueChanged(ListSelectionEvent e)
                         {
                             final int idx = e.getFirstIndex();
-                            final CompilationMessages.CompilationMessage message = idx < messages.size() ?
-                                    messages.get( idx ) : null;
+                            final CompilationMessages.CompilationMessage message =
+                                    idx < messages.size() ? messages.get( idx ) : null;
                             if ( message != null && message.offset >= 0 )
                             {
-                                System.out.println("Jump to offset "+message.offset);
                                 source.setCaretPosition( message.offset );
-//                                source.scroll
                                 source.requestFocus();
-                            }
-                            else
-                            {
-                                System.out.println( "Message has no (valid) location information");
                             }
                         }
                     });
                 }
             };
 
-            private final Style defaultStyle;
-            private final Style insnStyle;
-            private final Style identifierStyle;
-            private final Style registerStyle;
-            private final Style textStyle;
-
             {
-                insnStyle = document().addStyle( "instruction", null );
-                StyleConstants.setForeground(insnStyle, Color.BLUE);
+                final Configuration globalConf = Configuration.of( config );
 
-                identifierStyle = document().addStyle( "identifier", null );
-                StyleConstants.setForeground(identifierStyle, Color.GREEN.darker());
+                for ( Configuration.HighlightingColors key : Configuration.HighlightingColors.values() ) {
+                    globalConf.addStyle( key, document() );
+                }
 
-                registerStyle = document().addStyle( "register", null );
-                StyleConstants.setForeground(registerStyle, Color.MAGENTA);
-
-                textStyle = document().addStyle( "text", null );
-                StyleConstants.setForeground(textStyle, Color.BLACK);
-                StyleConstants.setBold(textStyle,true);
-
-                defaultStyle = document().addStyle( "defaultStyle", null );
+                document().addStyle( "defaultStyle", null );
 
                 configure(source);
 
@@ -1015,23 +992,37 @@ public class MainFrame extends JFrame
                                             return;
                                         }
                                         final StyledDocument document = document();
-                                        document.setCharacterAttributes(0,text.length(),defaultStyle,true );
+                                        document.setCharacterAttributes(0,text.length(),
+                                                document.getStyle( "defaultStyle" ),true );
                                         ast.visitInOrder((node, depth) ->
                                         {
                                             final TextRegion region = node.getRegion();
                                             if (node instanceof InstructionNode)
                                             {
                                                 document.setCharacterAttributes(
-                                                        region.getStartingOffset(), region.getLength(), insnStyle, true);
+                                                        region.getStartingOffset(),
+                                                        region.getLength(),
+                                                        Configuration.HighlightingColors.INSTRUCTION.getStyle( document ), true);
                                             } else if ( node instanceof LabelNode || node instanceof IdentifierNode ) {
                                                 document.setCharacterAttributes(
-                                                        region.getStartingOffset(), region.getLength(), identifierStyle, true);
+                                                        region.getStartingOffset(), region.getLength(),
+                                                        Configuration.HighlightingColors.IDENTIFIER.getStyle( document ), true);
                                             } else if ( node instanceof TextNode ) {
                                                 document.setCharacterAttributes(
-                                                        region.getStartingOffset(), region.getLength(), textStyle, true);
+                                                        region.getStartingOffset(), region.getLength(),
+                                                        Configuration.HighlightingColors.TEXT.getStyle( document ), true);
                                             } else if ( node instanceof RegisterNode ) {
                                                 document.setCharacterAttributes(
-                                                        region.getStartingOffset(), region.getLength(), registerStyle, true);
+                                                        region.getStartingOffset(), region.getLength(),
+                                                        Configuration.HighlightingColors.REGISTER.getStyle( document ), true);
+                                            } else if ( node instanceof DirectiveNode ) {
+                                                document.setCharacterAttributes(
+                                                        region.getStartingOffset(), region.getLength(),
+                                                        Configuration.HighlightingColors.DIRECTIVE.getStyle( document ), true);
+                                            } else if ( node instanceof CommentNode ) {
+                                                document.setCharacterAttributes(
+                                                        region.getStartingOffset(), region.getLength(),
+                                                        Configuration.HighlightingColors.COMMENT.getStyle( document ), true);
                                             }
                                         });
                                     }
