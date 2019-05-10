@@ -61,6 +61,8 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
@@ -74,6 +76,7 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -870,7 +873,6 @@ public class MainFrame extends JFrame
             private boolean documentChanged = true;
             private boolean documentChangeListenerEnabled=true;
 
-
             private final JTextPane source = new JTextPane();
             private final List<CompilationMessages.CompilationMessage> messages = new ArrayList<>();
             private final JTable table = new JTable(new DefaultTableModel()
@@ -878,7 +880,7 @@ public class MainFrame extends JFrame
                 @Override public int getRowCount() { return messages.size(); }
 
                 @Override
-                public int getColumnCount() {return 3;}
+                public int getColumnCount() {return 4;}
 
                 @Override
                 public String getColumnName(int columnIndex)
@@ -886,7 +888,8 @@ public class MainFrame extends JFrame
                     switch(columnIndex) {
                         case 0: return "Time";
                         case 1: return "Severity";
-                        case 2: return "Message";
+                        case 2: return "Location";
+                        case 3: return "Message";
                     }
                     throw new IllegalArgumentException("Invalid column "+columnIndex);
                 }
@@ -900,13 +903,50 @@ public class MainFrame extends JFrame
                     switch(columnIndex) {
                         case 0: return formatter.format(messages.get(rowIndex).timestamp );
                         case 1: return messages.get(rowIndex).severity.toString();
-                        case 2: return messages.get(rowIndex).message;
+                        case 2:
+                            {
+                                final CompilationMessages.CompilationMessage message = messages.get( rowIndex );
+                                if ( message.offset >= 0 )
+                                {
+                                    Point p = getSourceLocation( message.offset );
+                                    return p == null ? "n/a" : "Line " + p.y + ", column " + p.x;
+                                }
+                                return "n/a";
+                            }
+                        case 3: return messages.get(rowIndex).message;
                     }
                     throw new IllegalArgumentException("Invalid column "+columnIndex);
                 }
 
                 @Override public void setValueAt(Object aValue, int rowIndex, int columnIndex) { }
-            });
+            })
+            {
+
+                // JTable constructor...
+                {
+                    getSelectionModel().addListSelectionListener( new ListSelectionListener()
+                    {
+                        @Override
+                        public void valueChanged(ListSelectionEvent e)
+                        {
+                            final int idx = e.getFirstIndex();
+                            final CompilationMessages.CompilationMessage message = idx < messages.size() ?
+                                    messages.get( idx ) : null;
+                            if ( message != null && message.offset >= 0 )
+                            {
+                                System.out.println("Jump to offset "+message.offset);
+                                source.setCaretPosition( message.offset );
+//                                source.scroll
+                                source.requestFocus();
+                            }
+                            else
+                            {
+                                System.out.println( "Message has no (valid) location information");
+                            }
+                        }
+                    });
+                }
+            };
 
             private final Style defaultStyle;
             private final Style insnStyle;
@@ -1098,6 +1138,28 @@ public class MainFrame extends JFrame
                 if ( last != null ) {
                     loadSource(last);
                 }
+            }
+
+            public Point getSourceLocation(int offset)
+            {
+                final String src = source.getText();
+                int line = 1;
+                int column = 1;
+                for ( int i = 0, currentOffset = -1 ; i < src.length() ; i++ )
+                {
+                    currentOffset++;
+                    if ( currentOffset == offset ) {
+                        return new Point(column,line);
+                    }
+                    final char c = src.charAt(i);
+                    if ( c == '\n') {
+                        line++;
+                        column=1;
+                    } else {
+                        column++;
+                    }
+                }
+                return null;
             }
 
             private StyledDocument document() {

@@ -634,7 +634,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                     symbol = context.symbolTable.get( SymbolTable.GLOBAL_SCOPE, id );
                 }
                 if ( symbol == null ) {
-                    throw new RuntimeException("Unknown symbol '"+id.value+"'");
+                    context.error("Unknown symbol '"+id.value+"'", node);
+                    return false;
                 }
                 Object value = symbol.value;
                 switch( symbol.type ) {
@@ -863,6 +864,16 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 context.writeWord(this, 0x8006 | regNo0 << 8 | regNo1 << 4);
             }
         },
+        SHR2("SHR",OperandType.REGISTER) {
+            @Override
+            public void compile(InstructionNode instruction, Assembler.CompilationContext context)
+            {
+                // 8xy6 - SHR Vx
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = regNo0;
+                context.writeWord(this, 0x8006 | regNo0 << 8 | regNo1 << 4);
+            }
+        },
         SUBN("SUN",OperandType.REGISTER,OperandType.REGISTER)  {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
@@ -873,13 +884,23 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 context.writeWord(this, 0x8007 | regNo0 << 8 | regNo1 << 4);
             }
         },
-        SHL("SHL",OperandType.REGISTER)  {
+        SHL("SHL",OperandType.REGISTER,OperandType.REGISTER)  {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
                 // 8xyE - SHL Vx,Vy
                 int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
                 int regNo1 = assertIn4BitRange( evaluate( instruction.child(1), context ), instruction, context );
+                context.writeWord(this, 0x800e | regNo0 << 8 | regNo1 << 4);
+            }
+        },
+        SHL2("SHL",OperandType.REGISTER)  {
+            @Override
+            public void compile(InstructionNode instruction, Assembler.CompilationContext context)
+            {
+                // 8xyE - SHL Vx
+                int regNo0 = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
+                int regNo1 = regNo0;
                 context.writeWord(this, 0x800e | regNo0 << 8 | regNo1 << 4);
             }
         },

@@ -122,7 +122,7 @@ public class Assembler
 
     private void assemble(String source, CompilationContext context, int startAddress)
     {
-        context.info("Compilation started @ "+ ZonedDateTime.now(),0 );
+        context.info("Compilation started @ "+ ZonedDateTime.now(),-1 );
         compilationContext = context;
         compilationContext.currentAddress = startAddress;
 
@@ -145,9 +145,9 @@ public class Assembler
         ast.visitInOrder( new GenerateCodePhase() );
 
         if ( compilationContext.messages.hasErrors() ) {
-            context.error("Compilation finished with errors ",0 );
+            context.error("Compilation finished with errors ",-1 );
         } else {
-            context.info("Compilation finished ("+compilationContext.outputWriter.getBytesWritten()+" bytes)",0 );
+            context.info("Compilation finished ("+compilationContext.outputWriter.getBytesWritten()+" bytes)",-1 );
         }
     }
 
@@ -416,9 +416,12 @@ public class Assembler
                         ((InstructionNode) node).getInstruction( compilationContext );
                 if ( instruction == null )
                 {
-                    throw new RuntimeException( "Unknown instruction @ " + node );
+                    compilationContext.error( "Unrecognized instruction @ " + node, node );
                 }
-                instruction.compile( (InstructionNode) node, compilationContext );
+                else
+                {
+                    instruction.compile( (InstructionNode) node, compilationContext );
+                }
             }
         }
     }
