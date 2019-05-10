@@ -19,6 +19,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Superclass for AST nodes.
@@ -43,6 +44,7 @@ public class ASTNode
     }
 
     public final List<ASTNode> children = new ArrayList<>();
+
     public ASTNode parent;
 
     private TextRegion region;
@@ -146,5 +148,13 @@ public class ASTNode
            buffer.append("\n");
         });
         return buffer.toString();
+    }
+
+    public boolean hasNoChildren() {
+        return children.isEmpty();
+    }
+
+    public boolean hasChildren() {
+        return ! children.isEmpty();
     }
 }

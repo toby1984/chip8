@@ -16,6 +16,7 @@
 package de.codesourcery.chip8.asm.parser;
 
 import de.codesourcery.chip8.asm.Assembler;
+import de.codesourcery.chip8.asm.ExecutableWriter;
 import de.codesourcery.chip8.asm.ExpressionEvaluator;
 import de.codesourcery.chip8.asm.Identifier;
 import de.codesourcery.chip8.asm.Operator;
@@ -27,6 +28,8 @@ import de.codesourcery.chip8.asm.ast.ExpressionNode;
 import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
+import de.codesourcery.chip8.asm.ast.MacroDeclarationNode;
+import de.codesourcery.chip8.asm.ast.MacroParameterList;
 import de.codesourcery.chip8.asm.ast.NumberNode;
 import de.codesourcery.chip8.asm.ast.OperatorNode;
 import de.codesourcery.chip8.asm.ast.RegisterNode;
@@ -87,14 +90,18 @@ public class Parser
         throw new ParseException(message);
     }
 
+    private void error(String message,ASTNode node)
+    {
+        context.error(message, node);
+        throw new ParseException(message);
+    }
+
     private ASTNode internalParse() {
 
         final ASTNode ast = new ASTNode();
         while ( ! lexer.eof() )
         {
-            while ( lexer.peek().is(TokenType.NEWLINE) ) {
-                lexer.next();
-            }
+            skipNewlines();
             if ( ! lexer.eof() )
             {
                 final ASTNode stmt;
@@ -140,7 +147,7 @@ public class Parser
         }
         if ( statement.children.isEmpty() )
         {
-            error("Statement node has no children?");
+            error("Syntax error (not valid statement)");
         }
         return statement;
     }
@@ -405,7 +412,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             if ( lexer.peek().is(TokenType.IDENTIFIER ) )
             {
                 final String value = lexer.peek().value;
-                if ( Identifier.isReserved( value ) || DirectiveNode.isValidDirective( "."+ value ) )
+                if ( Identifier.isReserved( value ) )
                 {
                     lexer.pushBack( dot );
                     return null;
@@ -466,7 +473,119 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
         return null;
     }
 
-    private ASTNode parseDirective()
+    private MacroDeclarationNode parseMacro(TextRegion region)
+    {
+        final Token tok = lexer.peek();
+        if ( ! tok.is(TokenType.IDENTIFIER) )
+        {
+            error("Expected macro identifier");
+            return null;
+        }
+        final Identifier id = Identifier.of( tok.value );
+        if ( context.symbolTable.isDeclared( SymbolTable.GLOBAL_SCOPE, id ) )
+        {
+            error("Macro name '"+id.value+"' is clashing with already defined symbol "+
+                    context.symbolTable.get(SymbolTable.GLOBAL_SCOPE, id));
+            return null;
+        }
+        lexer.next(); // consume macro name
+
+        final MacroDeclarationNode result =  new MacroDeclarationNode(region);
+        result.add( new IdentifierNode( id, tok.region() ) );
+
+        context.symbolTable.define( SymbolTable.GLOBAL_SCOPE,
+                id, SymbolTable.Symbol.Type.MACRO,result);
+
+        // parse parameter list (if any)
+        if ( lexer.peek().is(TokenType.PARENS_OPEN ) )
+        {
+            lexer.next(); // consume '('
+
+            final MacroParameterList paramList = new MacroParameterList();
+            result.add( paramList );
+            final List<ASTNode> list = parseExpressionList( false );
+            list.forEach( x -> {
+                if ( x instanceof IdentifierNode )
+                {
+                    paramList.add( x );
+                }
+                else
+                {
+                    error("Expect an identifier (macro parameter name)",x);
+                }
+            });
+
+            if ( ! lexer.peek().is(TokenType.PARENS_CLOSE ) ) {
+                error("Expected closing parens");
+            }
+            lexer.next(); // consume ')'
+        }
+
+        // parse macro body
+        final StringBuilder buffer = new StringBuilder();
+        ASTNode body;
+        if ( "=".equals( lexer.peek().value ) ) {
+            // expression macro
+            lexer.next(); // consume '='
+
+            skipNewlines();
+
+            final int bodyStartOffset = lexer.peek().offset;
+            while ( ! lexer.eof() && ! lexer.peek().is(TokenType.NEWLINE) ) {
+                buffer.append( lexer.next().value );
+            }
+            body = parseMacroBody( buffer.toString(), bodyStartOffset, true);
+        }
+        else
+        {
+            // support both ".macro stuff {" and ".macro stuff <newline> {"
+            skipNewlines();
+            if ( ! lexer.peek().is(TokenType.CURLY_PARENS_OPEN ) ) {
+                error("Expected start of macro body");
+            }
+            lexer.next(); // consume '{'
+
+            skipNewlines(); // consume leading newlines so expression parsing doesn't fail
+
+            final int bodyStartOffset = lexer.peek().offset;
+            while ( ! lexer.eof() && ! lexer.peek().is(TokenType.CURLY_PARENS_CLOSE) ) {
+                buffer.append( lexer.next().value );
+            }
+            body = parseMacroBody( buffer.toString(), bodyStartOffset,false );
+            if ( lexer.peek().is(TokenType.CURLY_PARENS_CLOSE ) ) {
+                lexer.next(); // consume '}'
+            } else {
+                error("Expected closing curl parentheses");
+            }
+        }
+        if ( body != null )
+        {
+            result.add( body );
+        }
+        return result;
+    }
+
+    private ASTNode parseMacroBody(String body, int bodyStartOffset, boolean isExpression) {
+
+        final Assembler.CompilationContext tmpCtx = new Assembler.CompilationContext(new ExecutableWriter());
+        final Parser p = new Parser(new Lexer(new Scanner(body)),tmpCtx);
+        final ASTNode result = isExpression ? p.parseExpression() : p.parse();
+
+        // fix (error) message offsets
+        tmpCtx.messages.stream()
+                .map( x -> x.withOffset( x.offset+bodyStartOffset ))
+                .forEach( context.messages::add );
+        // fix AST node regions (if any)
+        result.visitInOrder( (node,depth) -> {
+            final TextRegion region = node.getRegion();
+            if ( region != null ) {
+                region.setStartingOffset( region.getStartingOffset()+bodyStartOffset );
+            }
+        });
+        return result;
+    }
+
+    private DirectiveNode parseDirective()
     {
         if ( lexer.peek().is( TokenType.DOT ) )
         {
@@ -481,6 +600,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             final DirectiveNode result;
             switch( directiveTok.value )
             {
+                case "macro":
+                    return parseMacro(directiveRegion);
                 case "reserve":
                     result = new DirectiveNode( DirectiveNode.Type.RESERVE, directiveRegion);
                     ASTNode node = parseExpression();
@@ -511,7 +632,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                             lexer.next();
                             valueRequired = true;
                         }
-                     } while (true);
+                    } while (true);
                     return result;
                 case "origin": // .origin 0x1234
                     ASTNode address = parseExpression();
@@ -541,19 +662,19 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                     result.add( value );
                     return result;
                 case "clearAliases":
-                    result = new DirectiveNode( DirectiveNode.Type.RESERVE, directiveRegion);
-                    node = parseExpression();
-                    if ( node != null )
+                    result = new DirectiveNode( DirectiveNode.Type.CLEAR_ALIASES, directiveRegion);
+                    final List<ASTNode> nodes = parseExpressionList(false);
+                    nodes.forEach( node1 ->
                     {
-                        if ( node instanceof RegisterNode || node instanceof IdentifierNode)
+                        if ( ! ( node1 instanceof RegisterNode || node1 instanceof IdentifierNode ) )
                         {
-                            result.add( node );
-                        } else {
-                            xxx
-                                    // TODO: parseExpressionList()...
-                            error(".clearAliases ")
+                            error("Bad argument, only registers or identifiers are allowed",node1);
                         }
-                    }
+                        // TODO: Adding nodes of unexpected type here will break later compilation phases but
+                        // removing all of them (if none happened to be of the right type) will also
+                        // yield unwanted behaviour, namely clearing of all aliases
+                        result.add( node1 );
+                    } );
                     return result;
                 case "equ": // .equ a = b
                     if ( ! Identifier.isValid( lexer.peek().value ) ) {
@@ -596,25 +717,26 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
         return null;
     }
 
-    private List<ASTNode> parseExpressionList()
+    private List<ASTNode> parseExpressionList(boolean atLeastOneArgumentRequired)
     {
-        List<ASTNode> result = new ArrayList<>();
-        boolean requiresMore = true;
-        do {
-            ASTNode node = parseExpression();
-            if ( node == null ) {
-                break;
+        final List<ASTNode> result = new ArrayList<>();
+        ASTNode node = parseExpression();
+        if ( node == null ) {
+            if ( atLeastOneArgumentRequired ) {
+                error("Expected at least one argument ");
             }
-            requiresMore = false;
-            result.add( node );
-            if ( ! lexer.peek().is(TokenType.COMMA ) ) {
-                break;
-            }
-            requiresMore = true;
-        } while( true );
-        if ( requiresMore )
+            return result;
+        }
+        result.add( node );
+        while ( lexer.peek().is(TokenType.COMMA) )
         {
-            error( "Trailing comma" , lexer.peek() );
+            lexer.next(); // consume comma
+            node = parseExpression();
+            if ( node == null ) {
+                error("Trailing comma");
+                return result;
+            }
+            result.add( node );
         }
         return result;
     }
@@ -1286,5 +1408,12 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             System.err.println( "Failed to find src line for offset " + offset );
         }
         System.err.println("ERROR: "+msg);
+    }
+
+    private void skipNewlines()
+    {
+        while( lexer.peek().is(TokenType.NEWLINE ) ) {
+            lexer.next(); // consume newline
+        }
     }
 }

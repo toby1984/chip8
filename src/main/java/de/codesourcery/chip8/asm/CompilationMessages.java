@@ -3,6 +3,7 @@ package de.codesourcery.chip8.asm;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.TextRegion;
 import de.codesourcery.chip8.asm.parser.Token;
+import org.apache.commons.lang3.Validate;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -27,11 +28,25 @@ public class CompilationMessages
             }
         }
 
-        public final ZonedDateTime timestamp = ZonedDateTime.now();
+        public final ZonedDateTime timestamp;
         public final Severity severity;
         public final int offset;
         public final int len;
         public final String message;
+
+        public CompilationMessage withOffset(int newOffset)
+        {
+            return new CompilationMessage( this.timestamp, this.severity, newOffset, this.len, this.message );
+        }
+
+        public CompilationMessage(ZonedDateTime timestamp, Severity severity, int offset, int len, String message)
+        {
+            this.timestamp = timestamp;
+            this.severity = severity;
+            this.offset = offset;
+            this.len = len;
+            this.message = message;
+        }
 
         public CompilationMessage(String message, Severity severity, int offset) {
             this(message, severity, offset, -1 );
@@ -54,10 +69,7 @@ public class CompilationMessages
 
         public CompilationMessage(String message, Severity severity, int offset, int len)
         {
-            this.severity = severity;
-            this.offset = offset;
-            this.len = len;
-            this.message = message;
+            this(ZonedDateTime.now(),severity,offset,len,message);
         }
 
         public boolean isError() { return severity == Severity.ERROR; };
@@ -76,52 +88,58 @@ public class CompilationMessages
         return result;
     }
 
+    public void add(CompilationMessage msg)
+    {
+        Validate.notNull( msg, "msg must not be null" );
+        this.messages.add( msg );
+    }
+
     public void info(String message, TextRegion region) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.INFO, region ) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.INFO, region ) );
     }
 
     public void info(String message, ASTNode node) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.INFO, node) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.INFO, node) );
     }
 
     public void info(String message, Token token) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.INFO, token) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.INFO, token) );
     }
 
     public void info(String message, int offset) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.INFO, offset) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.INFO, offset) );
     }
 
     public void warn(String message, int offset) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.WARNING, offset) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.WARNING, offset) );
     }
 
     public void warn(String message,TextRegion region) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.WARNING, region ) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.WARNING, region ) );
     }
 
     public void warn(String message,ASTNode node) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.WARNING, node) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.WARNING, node) );
     }
 
     public void warn(String message,Token token) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.WARNING, token) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.WARNING, token) );
     }
 
     public void error(String message, int offset) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.ERROR, offset) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.ERROR, offset) );
     }
 
     public void error(String message,TextRegion region) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.ERROR, region ) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.ERROR, region ) );
     }
 
     public void error(String message,ASTNode node) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.ERROR, node) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.ERROR, node) );
     }
 
     public void error(String message,Token token) {
-        messages.add( new CompilationMessage( message, CompilationMessage.Severity.ERROR, token) );
+        add( new CompilationMessage( message, CompilationMessage.Severity.ERROR, token) );
     }
 
     public boolean hasErrors()

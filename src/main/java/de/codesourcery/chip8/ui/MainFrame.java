@@ -999,6 +999,8 @@ public class MainFrame extends JFrame
                                             final TextRegion region = node.getRegion();
                                             if (node instanceof InstructionNode)
                                             {
+                                                InstructionNode insn = (InstructionNode) node;
+                                                System.out.println("Highlighting "+insn.mnemonic+" @ "+insn.getRegion());
                                                 document.setCharacterAttributes(
                                                         region.getStartingOffset(),
                                                         region.getLength(),

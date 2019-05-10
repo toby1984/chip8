@@ -4,13 +4,21 @@ public class DirectiveNode extends ASTNode
 {
     public enum Type
     {
-        BYTE,
-        WORD,
-        RESERVE,
-        EQU,
-        ORIGIN,
-        ALIAS,
-        CLEAR_ALIASES
+        BYTE( "byte" ),
+        WORD( "word" ),
+        RESERVE( "reserve" ),
+        EQU( "equ" ),
+        ORIGIN( "origin" ),
+        ALIAS( "alias" ),
+        MACRO( "macro" ),
+        CLEAR_ALIASES( "clearAliases" );
+
+        public final String keyword;
+
+        Type(String keyword)
+        {
+            this.keyword = keyword;
+        }
     }
 
     public final Type type;
@@ -25,24 +33,5 @@ public class DirectiveNode extends ASTNode
     public String toString()
     {
         return "Directive [ "+type+" ]";
-    }
-
-    public static final boolean isValidDirective(String s)
-    {
-        if ( s != null )
-        {
-            switch (s.toLowerCase())
-            {
-                case ".equ":
-                case ".alias":
-                case ".clearaliases":
-                case ".origin":
-                case ".byte":
-                case ".word":
-                case ".reserve":
-                    return true;
-            }
-        }
-        return false;
     }
 }

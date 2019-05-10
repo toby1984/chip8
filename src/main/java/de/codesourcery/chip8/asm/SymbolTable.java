@@ -15,10 +15,16 @@
  */
 package de.codesourcery.chip8.asm;
 
+import de.codesourcery.chip8.asm.ast.ASTNode;
+import de.codesourcery.chip8.asm.ast.IdentifierNode;
+import de.codesourcery.chip8.asm.ast.RegisterNode;
 import org.apache.commons.lang3.Validate;
 
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Crude symbol table.
@@ -40,7 +46,9 @@ public class SymbolTable
         public enum Type {
             LABEL,
             EQU,
-            REGISTER_ALIAS
+            MACRO,
+            /** Symbol value is register number (java.lang.Integer), symbol name is alias */
+            REGISTER_ALIAS;
         }
 
         public final Identifier scope;
@@ -65,6 +73,10 @@ public class SymbolTable
         public boolean isDefined()
         {
             return type != null && value != null;
+        }
+
+        public boolean hasType(Symbol.Type type) {
+            return type.equals( this.type );
         }
     }
 
@@ -179,10 +191,10 @@ public class SymbolTable
     }
 
     /**
-     * Removes all register aliases from the symbol table.
+     * Removes register aliases from the symbol table.
      */
-    public void clearAliases()
+    public void clearAliases(Predicate<Symbol> predicate)
     {
-        symbols.entrySet().removeIf( x -> x.getValue().type == Symbol.Type.REGISTER_ALIAS );
+        symbols.values().removeIf( s -> s.hasType( Symbol.Type.REGISTER_ALIAS ) && predicate.test(s) );
     }
 }

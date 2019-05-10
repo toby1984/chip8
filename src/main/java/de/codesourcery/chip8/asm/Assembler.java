@@ -35,6 +35,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.time.ZonedDateTime;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Crude CHIP-8 assembler.
@@ -123,10 +126,11 @@ public class Assembler
     private void assemble(String source, CompilationContext context, int startAddress)
     {
         context.info("Compilation started @ "+ ZonedDateTime.now(),-1 );
+
         compilationContext = context;
         compilationContext.currentAddress = startAddress;
 
-        // parse
+        // parse phase
         final Lexer lexer = new Lexer( new Scanner( source ) );
         final Parser p = new Parser( lexer, context );
         final ASTNode ast = p.parse();
@@ -137,12 +141,18 @@ public class Assembler
             System.out.println( StringUtils.repeat( ' ', depth ) + " " + node );
         });
 
-        // assign addresses to labels
-        ast.visitInOrder( new AssignSymbolsPhase() );
+        if ( ! compilationContext.hasErrors() )
+        {
+            // assign addresses to labels
+            ast.visitInOrder( new AssignSymbolsPhase() );
+        }
 
-        // now generate binary
-        compilationContext.currentAddress = startAddress;
-        ast.visitInOrder( new GenerateCodePhase() );
+        if ( ! compilationContext.hasErrors() )
+        {
+            // now generate binary
+            compilationContext.currentAddress = startAddress;
+            ast.visitInOrder( new GenerateCodePhase() );
+        }
 
         if ( compilationContext.messages.hasErrors() ) {
             context.error("Compilation finished with errors ",-1 );
@@ -158,6 +168,7 @@ public class Assembler
         Identifier lastGlobalLabel = SymbolTable.GLOBAL_SCOPE;
         public final CompilationMessages messages = new CompilationMessages();
         int currentAddress;
+        private int globalUniqueIdentifier = 0;
 
         public CompilationContext(ExecutableWriter writer)
         {
@@ -167,6 +178,11 @@ public class Assembler
         public Identifier getLastGlobalLabel()
         {
             return lastGlobalLabel == null ? SymbolTable.GLOBAL_SCOPE : lastGlobalLabel;
+        }
+
+        public Identifier generateUniqueGlobalIdentifier()
+        {
+            return Identifier.of( "tmp_"+(globalUniqueIdentifier++));
         }
 
         private String hex(int value)
@@ -278,7 +294,27 @@ public class Assembler
                 switch ( directive.type )
                 {
                     case CLEAR_ALIASES:
-                        compilationContext.symbolTable.clearAliases();
+                        final Set<Identifier> identifiers = new HashSet<>();
+                        final Set<Integer> registers = new HashSet<>();
+
+                        for (ASTNode n : node.children)
+                        {
+                            if ( n instanceof RegisterNode )
+                            {
+                                registers.add(((RegisterNode) n).regNum);
+                            }
+                            else if ( n instanceof IdentifierNode )
+                            {
+                                identifiers.add( ((IdentifierNode) n).identifier );
+                            }
+                            else
+                            {
+                                throw new IllegalArgumentException( "Unsupported AST node: " + node );
+                            }
+                        }
+                        final Predicate<SymbolTable.Symbol> toRemove =
+                                symbol -> registers.contains( symbol.value ) || identifiers.contains( symbol.name );
+                        compilationContext.symbolTable.clearAliases(toRemove);
                         break;
                     case ALIAS:
                         final RegisterNode regNode = (RegisterNode) node.child( 0 );

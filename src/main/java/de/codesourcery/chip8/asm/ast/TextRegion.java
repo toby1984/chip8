@@ -302,4 +302,11 @@ public class TextRegion implements Serializable
 			merge( r );
 		}
 	}
+
+	public void setStartingOffset(int offset) {
+	    if ( offset < 0 ) {
+	        throw new IllegalArgumentException( "Offset must be >= 0" );
+        }
+	    this.startingOffset = offset;
+    }
 }

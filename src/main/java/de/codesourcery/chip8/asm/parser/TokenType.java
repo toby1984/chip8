@@ -32,6 +32,8 @@ public enum TokenType
     BINARY_NUMBER, // %1010110
     // v<NUMBER>
     REGISTER,
+    CURLY_PARENS_OPEN, // {
+    CURLY_PARENS_CLOSE, // }
     DOT, // '.'
     COMMA, // ','
     COLON, // ':'

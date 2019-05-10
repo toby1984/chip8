@@ -15,6 +15,7 @@
  */
 package de.codesourcery.chip8.asm;
 
+import de.codesourcery.chip8.asm.ast.DirectiveNode;
 import de.codesourcery.chip8.asm.parser.Parser;
 
 import java.util.HashSet;
@@ -31,26 +32,30 @@ public class Identifier
     // valid identifiers look like this
     private static final Pattern ID = Pattern.compile("[_a-zA-Z]+[_0-9a-zA-Z]*");
 
+    // reserved identifiers
     private static final Set<String> RESERVED = new HashSet<>();
 
-    static {
-        RESERVED.add("i");
-        RESERVED.add("k");
-        RESERVED.add("dt");
-        RESERVED.add("st");
-        RESERVED.add("f");
-        RESERVED.add("b");
-        RESERVED.add("origin");
-        RESERVED.add("equ");
-        RESERVED.add("byte");
-        RESERVED.add("word");
-        RESERVED.add("reserve");
-        RESERVED.add("alias");
-        RESERVED.add("pc");
-        RESERVED.add("[i]");
-        for ( Parser.Instruction insn : Parser.Instruction.values() ) {
-            RESERVED.add( insn.mnemonic.toLowerCase() );
+    static
+    {
+        reserved("i");
+        reserved("k");
+        reserved("dt");
+        reserved("st");
+        reserved("f");
+        reserved("b");
+        reserved("pc");
+        reserved("[i]");
+
+        for (DirectiveNode.Type t : DirectiveNode.Type.values() ) {
+            reserved( t.keyword );
         }
+        for ( Parser.Instruction insn : Parser.Instruction.values() ) {
+            reserved( insn.mnemonic );
+        }
+    }
+
+    private static void reserved(String s) {
+        RESERVED.add( s.toLowerCase() );
     }
 
     public final String value;

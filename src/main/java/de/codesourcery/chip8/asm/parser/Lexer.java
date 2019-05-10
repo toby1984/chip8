@@ -139,6 +139,16 @@ public final class Lexer
                     scanner.next();
                     tokens.add( new Token( TokenType.OPERATOR, c, scanner.offset() ) );
                     return;
+                case '{':
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.CURLY_PARENS_OPEN, c, scanner.offset() ) );
+                    return;
+                case '}':
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    tokens.add( new Token( TokenType.CURLY_PARENS_CLOSE, c, scanner.offset() ) );
+                    return;
                 case '=':
                     parseBuffer(startOffset);
                     scanner.next();
