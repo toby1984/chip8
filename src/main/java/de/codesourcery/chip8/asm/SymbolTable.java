@@ -177,4 +177,12 @@ public class SymbolTable
     public boolean isDeclared(Identifier scope,Identifier identifier) {
         return get(scope,identifier) != null;
     }
+
+    /**
+     * Removes all register aliases from the symbol table.
+     */
+    public void clearAliases()
+    {
+        symbols.entrySet().removeIf( x -> x.getValue().type == Symbol.Type.REGISTER_ALIAS );
+    }
 }

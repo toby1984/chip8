@@ -699,7 +699,9 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             return false;
         }
 
-        private boolean checkNumberInRange(int v) {
+        private boolean checkNumberInRange(int v)
+        {
+            v = fixSigned( v );
             if ( this == NIBBLE ) {
                 return v >= 0 && v <= 15;
             }
@@ -711,6 +713,19 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             }
             return false;
         }
+    }
+
+    private static int fixSigned(int v)
+    {
+        if ( (v&1<<31) != 0 ) { // MSB set => negative number
+            if ( (v & 0xffff0000) == 0xffff0000) {
+                v &= 0xffff;
+                if ( (v & 0x0000ff00) == 0x0000ff00) {
+                    v &= 0xff;
+                }
+            }
+        }
+        return v;
     }
 
     public enum Instruction
@@ -1077,6 +1092,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
         protected int assertIn12BitRange(int value,ASTNode node, Assembler.CompilationContext context)
         {
+            value = fixSigned( value );
             if ( value < 0 || value > 0xfff) {
                 context.error( "Value not in 12-bit range: 0x"+Integer.toHexString( value ), node );
             }
@@ -1085,6 +1101,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
         protected int assertIn8BitRange(int value, ASTNode node, Assembler.CompilationContext context)
         {
+            value = fixSigned( value );
             if ( value < 0 || value > 0xff) {
                 context.error( "Value not in 8-bit range: 0x"+Integer.toHexString( value ), node );
             }
@@ -1093,6 +1110,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
         protected int assertIn4BitRange(int value,ASTNode node, Assembler.CompilationContext context)
         {
+            value = fixSigned( value );
             if ( value < 0 || value > 0b1111) {
                 context.error( "Value not in 4-bit range: 0x"+Integer.toHexString( value ),node );
             }

@@ -9,7 +9,8 @@ public class DirectiveNode extends ASTNode
         RESERVE,
         EQU,
         ORIGIN,
-        ALIAS
+        ALIAS,
+        CLEAR_ALIASES
     }
 
     public final Type type;
@@ -34,6 +35,7 @@ public class DirectiveNode extends ASTNode
             {
                 case ".equ":
                 case ".alias":
+                case ".clearaliases":
                 case ".origin":
                 case ".byte":
                 case ".word":

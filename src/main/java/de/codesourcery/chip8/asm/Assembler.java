@@ -270,7 +270,6 @@ public class Assembler
 
     public abstract class CompilationPhase implements ASTNode.Visitor
     {
-
         protected final void visitDirective(ASTNode node, boolean generateCode)
         {
             if ( node instanceof DirectiveNode )
@@ -278,6 +277,9 @@ public class Assembler
                 final DirectiveNode directive = (DirectiveNode) node;
                 switch ( directive.type )
                 {
+                    case CLEAR_ALIASES:
+                        compilationContext.symbolTable.clearAliases();
+                        break;
                     case ALIAS:
                         final RegisterNode regNode = (RegisterNode) node.child( 0 );
                         final IdentifierNode idNode = (IdentifierNode) node.child( 1 );
