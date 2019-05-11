@@ -15,11 +15,13 @@
  */
 package de.codesourcery.chip8.asm;
 
+import de.codesourcery.chip8.asm.ast.AST;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.DirectiveNode;
 import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
+import de.codesourcery.chip8.asm.ast.MacroDeclarationNode;
 import de.codesourcery.chip8.asm.ast.MacroInvocationNode;
 import de.codesourcery.chip8.asm.ast.RegisterNode;
 import de.codesourcery.chip8.asm.ast.TextRegion;
@@ -36,7 +38,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -133,32 +138,16 @@ public class Assembler
         compilationContext.currentAddress = startAddress;
 
         // parse phase
-        final Lexer lexer = new Lexer( new Scanner( source ) );
-        final Parser p = new Parser( lexer, context );
-        final ASTNode ast = p.parse();
+        final List<CompilationPhase> phases = List.of( new ParseSourcePhase( source ),
+                new ExpandMacrosPhase(),
+                new AssignSymbolsPhase(),
+                new GenerateCodePhase(startAddress) );
 
-        System.out.println( "---- AST ---\n" );
-        ast.visitInOrder( (node, depth) ->
+        for (Iterator<CompilationPhase> it = phases.iterator();
+             it.hasNext() && ! compilationContext.hasErrors() ; )
         {
-            System.out.println( StringUtils.repeat( ' ', depth ) + " " + node );
-        });
-
-        // expand macro invocations
-        if ( ! compilationContext.hasErrors() ) {
-            ast.visitInOrder( new ExpandMacrosPhase() );
-        }
-
-        // assign addresses to labels
-        if ( ! compilationContext.hasErrors() )
-        {
-            ast.visitInOrder( new AssignSymbolsPhase() );
-        }
-
-        if ( ! compilationContext.hasErrors() )
-        {
-            // now generate binary
-            compilationContext.currentAddress = startAddress;
-            ast.visitInOrder( new GenerateCodePhase() );
+            final CompilationPhase phase = it.next();
+            phase.perform();
         }
 
         if ( compilationContext.messages.hasErrors() ) {
@@ -175,6 +164,7 @@ public class Assembler
         Identifier lastGlobalLabel = SymbolTable.GLOBAL_SCOPE;
         public final CompilationMessages messages = new CompilationMessages();
         int currentAddress;
+        public AST ast;
 
         public CompilationContext(ExecutableWriter writer)
         {
@@ -293,7 +283,7 @@ public class Assembler
     public final class ExpandMacrosPhase extends CompilationPhase {
 
         @Override
-        public void visit(ASTNode node, int depth)
+        public void visit(ASTNode node, ASTNode.IterationContext ctx)
         {
             if ( node instanceof MacroInvocationNode )
             {
@@ -328,8 +318,42 @@ public class Assembler
         }
     }
 
-    public abstract class CompilationPhase implements ASTNode.Visitor
+    public final class ParseSourcePhase extends CompilationPhase {
+
+        private final String source;
+
+        public ParseSourcePhase(String source) {
+            this.source = source;
+        }
+
+        @Override
+        public void perform()
+        {
+            final Lexer lexer = new Lexer( new Scanner( source ) );
+            final Parser p = new Parser( lexer, compilationContext );
+            compilationContext.ast = (AST) p.parse();
+
+            System.out.println( "---- AST ---\n" );
+            compilationContext.ast.visitInOrder( (node, depth) ->
+            {
+                System.out.println( StringUtils.repeat( ' ', depth ) + " " + node );
+            });
+        }
+
+        @Override
+        public void visit(ASTNode node, ASTNode.IterationContext ctx)
+        {
+            // nothing to be done here
+        }
+    }
+
+    public abstract class CompilationPhase implements ASTNode.Visitor2
     {
+        public void perform()
+        {
+            compilationContext.ast.visitInOrder2( this );
+        }
+
         protected final void visitDirective(ASTNode node, boolean generateCode)
         {
             if ( node instanceof DirectiveNode )
@@ -426,8 +450,11 @@ public class Assembler
     public final class AssignSymbolsPhase extends CompilationPhase
     {
         @Override
-        public void visit(ASTNode node, int depth)
+        public void visit(ASTNode node, ASTNode.IterationContext ctx)
         {
+            if ( node instanceof MacroDeclarationNode) {
+                ctx.dontGoDeeper();
+            }
             if ( node instanceof DirectiveNode )
             {
                 if ( ((DirectiveNode) node).type == DirectiveNode.Type.EQU )
@@ -477,10 +504,26 @@ public class Assembler
 
     public final class GenerateCodePhase extends CompilationPhase
     {
+        public final int startAddress;
+
+        public GenerateCodePhase(int startAddress ) {
+            this.startAddress = startAddress;
+        }
+
         @Override
-        public void visit(ASTNode node, int depth)
+        public void perform()
         {
-            if ( node instanceof DirectiveNode )
+            compilationContext.currentAddress = startAddress;
+            super.perform();
+        }
+
+        @Override
+        public void visit(ASTNode node, ASTNode.IterationContext ctx)
+        {
+            if ( node instanceof MacroDeclarationNode ) {
+                ctx.dontGoDeeper();
+            }
+            else if ( node instanceof DirectiveNode )
             {
                 visitDirective( node,true );
             }

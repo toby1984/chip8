@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
  */
 public final class Lexer
 {
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
 
     private static final Pattern BINARY_NUMBER = Pattern.compile("%[01]+");
     private static final Pattern DECIMAL_NUMBER = Pattern.compile("[0-9]+");

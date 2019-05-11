@@ -64,7 +64,7 @@ public class CompilationMessages
 
         public CompilationMessage(String message, Severity severity, TextRegion region)
         {
-            this(message, severity, region.getStartingOffset(), region.getLength() );
+            this(message, severity, region == null ? -1 : region.getStartingOffset(), region == null ? 0 : region.getLength() );
         }
 
         public CompilationMessage(String message, Severity severity, int offset, int len)

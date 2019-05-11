@@ -613,6 +613,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 final Identifier newId = context.generateUniqueIdentifier();
                 context.symbolTable.declare( SymbolTable.GLOBAL_SCOPE, newId, SymbolTable.Symbol.Type.LABEL );
                 labelMappings.put( oldId, newId );
+                ((LabelNode) n).id = newId;
             }
         });
 
@@ -630,13 +631,14 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
         });
 
         // check number of invocation arguments matches number of macro parameters
-        if ( macroInvocation.getArguments().size() != decl.parameterCount() ) {
+        final List<ASTNode> arguments = macroInvocation.getArguments();
+        final MacroParameterList parameterList = decl.getParameterList();
+        if ( arguments.size() != parameterList.childCount() ) {
             context.error("Wrong number of macro arguments, expected "+
                     decl.parameterCount()+" but found "+macroInvocation.getArguments().size(), macroInvocation);
             return macroInvocation;
         }
         // map parameter names to parameter indices
-        final MacroParameterList parameterList = decl.getParameterList();
         final Map<Identifier,Integer> paramIndexByName = new HashMap<>();
         int index = 0;
         for ( ASTNode child : decl.getParameterList().children ) {
@@ -656,7 +658,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 {
                     Integer idx = paramIndexByName.get( ((IdentifierNode) n).identifier );
                     if ( idx != null ) { // substitute with parameter
-                        n.replaceWith( parameterList.child( idx ).createCopy() );
+                        n.replaceWith( arguments.get( idx ).createCopy() );
                     }
                 }
         });
@@ -1072,11 +1074,11 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 context.writeWord( this,0x2000 | assertIn12BitRange( evaluate( instruction.child( 0 ), context ), instruction, context ) );
             }
         },
-        SE("se",OperandType.REGISTER,OperandType.BYTE) {
+        SSE("sse",OperandType.REGISTER,OperandType.BYTE) {
             @Override
             public void compile(InstructionNode instruction, Assembler.CompilationContext context)
             {
-                // 3xkk - SE Vx, byte
+                // 3xkk - SSE Vx, byte
                 int regNo = assertIn4BitRange( evaluate( instruction.child(0), context ), instruction, context );
                 int cnst = assertIn8BitRange( evaluate( instruction.child(1), context ), instruction, context );
                 context.writeWord(this, 0x3000 | regNo << 8 | cnst );

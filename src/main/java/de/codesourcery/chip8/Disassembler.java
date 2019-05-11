@@ -93,15 +93,15 @@ public class Disassembler
             }
             else if ( data == 0xee )
             {
-                // 0x00EE 	rts 	return from subroutine call
-                buffer.append("rts");
+                // 0x00EE 	ret return from subroutine call
+                buffer.append("ret");
             } else {
                 illegalInstruction();
             }
         }
         else if ( (cmd & 0xf0) == 0x10 )
         {
-            // 0x1xxx 	jmp xxx 	jump to address
+            // 0x1xxx 	jp xxx 	jump to address
             buffer.append("jp 0x");
             wordToHex( (cmd & 0x0f)<<8|(data& 0xff) );
         }
@@ -111,27 +111,27 @@ public class Disassembler
             wordToHex((cmd & 0x0f)<<8|(data& 0xff) );
         }
         else if ( (cmd & 0xf0) == 0x30 ) {
-            // 0x3rxx 	skeq vr,xx 	skip if register r = constant
+            // 0x3rxx 	se vr,xx 	skip if register r = constant
             int r0 = cmd & 0x0f;
             int cnst = data & 0xff;
-            buffer.append("skeq ");
+            buffer.append("sse ");
             buffer.append("v"+r0).append(", 0x");
             byteToHex( cnst );
         }
         else if ( (cmd & 0xf0) == 0x40 ) {
-            // 0x4rxx 	skne vr,xx 	skip if register r <> constant
+            // 0x4rxx 	sne vr,xx 	skip if register r <> constant
             int r0 = cmd & 0x0f;
             int cnst = data & 0xff;
-            buffer.append("skne ");
+            buffer.append("sne ");
             buffer.append( "v" ).append( r0 ).append(", 0x");
             byteToHex( cnst );
         }
         else if ( (cmd & 0xf0) == 0x50 )
         {
-            // 0x5ry0 	skeq vr,vy 	skip if register r = register y
+            // 0x5ry0 	se vr,vy 	skip if register r = register y
             int r0 = cmd & 0x0f;
             int r1 = (data & 0xf0)>>>4;
-            buffer.append("skeq v").append(r0).append(", v").append(r1);
+            buffer.append("se v").append(r0).append(", v").append(r1);
         }
         else if ( (cmd & 0xf0) == 0x60 ) {
             // 0x6rxx 	mov vr,xx 	move constant to register r
@@ -198,10 +198,10 @@ public class Disassembler
             }
         }
         else if ( (cmd & 0xf0) == 0x90 ) {
-            // 0x9ry0 	skne rx,ry 	skip if register rx <> register ry
+            // 0x9ry0 	sne rx,ry 	skip if register rx <> register ry
             int r0 = cmd & 0x0f;
             int r1 = (data & 0xf0)>>>4;
-            buffer.append("skne v").append(r0).append(",v").append(r1);
+            buffer.append("sne v").append(r0).append(",v").append(r1);
         }
         else if ( (cmd & 0xf0) == 0xa0 ) {
             // 0xaxxx 	mvi xxx 	Load index register with constant xxx
@@ -216,8 +216,8 @@ public class Disassembler
             wordToHex( adr );
         }
         else if ( (cmd & 0xf0) == 0xc0 ) {
-            // 0xcrxx 	rand vr,xxx    	vr = random number less than or equal to xxx
-            buffer.append("rand v").append(cmd&0x0f).append(",");
+            // 0xcrxx 	rnd vr,xxx    	vr = random number less than or equal to xxx
+            buffer.append("rnd v").append(cmd&0x0f).append(",");
             byteToHex(data&0xff);
         }
         else if ( (cmd & 0xf0) == 0xd0 )
@@ -225,7 +225,7 @@ public class Disassembler
             int x = cmd & 0x0f;
             int y = (data & 0xf0)>>>4;
             int height = (data & 0x0f);
-            buffer.append("draw ").append(x).append(",")
+            buffer.append("drw ").append(x).append(",")
                     .append(y).append(",").append(height);
         }
         else if ( (cmd & 0xf0) == 0xe0 )
@@ -268,10 +268,6 @@ public class Disassembler
                 case 0x29:   // 0xfr29	font vr 	point I to the sprite for hexadecimal character in vr
                     // Sprite is 5 bytes high
                     buffer.append("ld v").append(r0).append(", F");
-                    break;
-                case 0x30:   // 0xfr30	xfont vr 	point I to the sprite for hexadecimal character in vr
-                    // Sprite is 10 bytes high,Super only
-                    buffer.append("xld v").append(r0).append(", F");
                     break;
                 case 0x33:   // 0xfr33	bcd vr 	store the bcd representation of register vr at
                     // // location I,I+1,I+2

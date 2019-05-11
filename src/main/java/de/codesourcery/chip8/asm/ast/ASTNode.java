@@ -43,6 +43,27 @@ public abstract class ASTNode
         void visit(ASTNode node,int depth);
     }
 
+    @FunctionalInterface
+    public interface Visitor2
+    {
+        /**
+         * Visit an AST node.
+         *
+         * @param node node to visit
+         * @param ctx context to control iteration
+         */
+        void visit(ASTNode node,IterationContext ctx);
+    }
+
+    public class IterationContext {
+
+        public boolean stop;
+        public boolean dontGoDeeper;
+
+        public void stop() { stop = true; }
+        public void dontGoDeeper() { dontGoDeeper = true; }
+    }
+
     public final List<ASTNode> children = new ArrayList<>();
 
     public ASTNode parent;
@@ -159,6 +180,27 @@ public abstract class ASTNode
         children.forEach( c -> c.visitInOrder( visitor, depth+1 ) );
     }
 
+    /**
+     * Traverse the subtree starting at this node in-order.
+     * @param visitor
+     */
+    public final <T> void visitInOrder2(Visitor2 visitor) {
+        visitInOrder2(visitor, new IterationContext() );
+    }
+
+    private final <T> void visitInOrder2(Visitor2 visitor, IterationContext ctx)
+    {
+        visitor.visit( this, ctx );
+        if ( ctx.stop ) {
+            return;
+        }
+        if ( ctx.dontGoDeeper ) {
+            ctx.dontGoDeeper = false;
+            return;
+        }
+        children.forEach( c -> c.visitInOrder2( visitor, ctx) );
+    }
+
     public final String toPrettyString() {
         final StringBuilder buffer = new StringBuilder();
         visitInOrder( (node,depth) -> {
@@ -199,4 +241,6 @@ public abstract class ASTNode
     }
 
     public abstract ASTNode copyThisNode();
+
+
 }

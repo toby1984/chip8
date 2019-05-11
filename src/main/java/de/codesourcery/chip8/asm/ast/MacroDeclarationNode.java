@@ -38,16 +38,19 @@ public class MacroDeclarationNode extends DirectiveNode
 
     public ASTNode getMacroBody()
     {
-        if ( childCount() == 0 ) {
-            return null;
+        switch ( childCount() )
+        {
+            case 0:
+                throw new IllegalStateException( "Macro declaration needs to have at least one child node" );
+            case 1:  // only child node is the macro identifier
+                return null;
+            case 2:
+                return child( 1 ) instanceof MacroParameterList ? null : child( 1 );
+            case 3:
+                return child( 2 );
+            default:
+                throw new IllegalStateException("Macro declaration "+this+" has more than 3 child nodes?");
         }
-        if ( childCount() == 1 ) { // only macro identifier
-            return child( 0 ) instanceof MacroParameterList ? null : child( 0 );
-        }
-        if ( childCount() == 2 ) {
-            return child(1);
-        }
-        throw new IllegalStateException("Macro declaration "+this+" has more than 2 child nodes?");
     }
 
     public int parameterCount()
