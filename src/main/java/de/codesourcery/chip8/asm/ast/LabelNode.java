@@ -34,6 +34,12 @@ public class LabelNode extends ASTNode
         this.id = id;
     }
 
+    @Override
+    public ASTNode copyThisNode()
+    {
+        return new LabelNode(this.id,this.isLocal,getRegionCopy());
+    }
+
     public boolean isGlobal() {
         return ! isLocal;
     }

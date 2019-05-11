@@ -38,6 +38,12 @@ public class RegisterNode extends ASTNode
     }
 
     @Override
+    public ASTNode copyThisNode()
+    {
+        return new RegisterNode(this.regNum, getRegionCopy());
+    }
+
+    @Override
     public String toString()
     {
         return "RegisterNode[ "+regNum+" ]";

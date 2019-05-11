@@ -33,6 +33,12 @@ public class InstructionNode extends ASTNode
         this.mnemonic = mnemonic;
     }
 
+    @Override
+    public ASTNode copyThisNode()
+    {
+        return new InstructionNode(this.mnemonic, getRegionCopy());
+    }
+
     public Parser.Instruction getInstruction(Assembler.CompilationContext context)
     {
         return Parser.Instruction.findMatch( this, context);

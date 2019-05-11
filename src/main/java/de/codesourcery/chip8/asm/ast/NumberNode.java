@@ -30,6 +30,12 @@ public class NumberNode extends ASTNode
     }
 
     @Override
+    public ASTNode copyThisNode()
+    {
+        return new NumberNode(this.value, getRegionCopy());
+    }
+
+    @Override
     public String toString()
     {
         return "NumberNode[ "+value+" ]";

@@ -32,6 +32,12 @@ public class TextNode extends ASTNode
         this.value = value;
     }
 
+    @Override
+    public ASTNode copyThisNode()
+    {
+        return new TextNode(this.value, getRegionCopy());
+    }
+
     public boolean isValidIdentifier() {
         return Identifier.isValid(value);
     }

@@ -15,6 +15,12 @@ public class IdentifierNode extends ASTNode
     }
 
     @Override
+    public ASTNode copyThisNode()
+    {
+        return new IdentifierNode(this.identifier, getRegionCopy());
+    }
+
+    @Override
     public String toString()
     {
         return "Identifier[ "+identifier+" ]";

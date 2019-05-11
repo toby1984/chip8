@@ -31,6 +31,12 @@ public class CommentNode extends ASTNode
     }
 
     @Override
+    public ASTNode copyThisNode()
+    {
+        return new CommentNode(this.value,getRegionCopy());
+    }
+
+    @Override
     public String toString()
     {
         return "CommentNode[ "+value+" ]";

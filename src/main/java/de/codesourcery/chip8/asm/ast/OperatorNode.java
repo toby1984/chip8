@@ -15,6 +15,12 @@ public class OperatorNode extends ASTNode
     }
 
     @Override
+    public ASTNode copyThisNode()
+    {
+        return new OperatorNode(this.operator, getRegionCopy());
+    }
+
+    @Override
     public String toString()
     {
         return "OperatorNode[ "+operator+" ]";

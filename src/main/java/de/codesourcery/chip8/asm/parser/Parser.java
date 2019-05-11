@@ -21,6 +21,7 @@ import de.codesourcery.chip8.asm.ExpressionEvaluator;
 import de.codesourcery.chip8.asm.Identifier;
 import de.codesourcery.chip8.asm.Operator;
 import de.codesourcery.chip8.asm.SymbolTable;
+import de.codesourcery.chip8.asm.ast.AST;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.CommentNode;
 import de.codesourcery.chip8.asm.ast.DirectiveNode;
@@ -29,10 +30,12 @@ import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
 import de.codesourcery.chip8.asm.ast.MacroDeclarationNode;
+import de.codesourcery.chip8.asm.ast.MacroInvocationNode;
 import de.codesourcery.chip8.asm.ast.MacroParameterList;
 import de.codesourcery.chip8.asm.ast.NumberNode;
 import de.codesourcery.chip8.asm.ast.OperatorNode;
 import de.codesourcery.chip8.asm.ast.RegisterNode;
+import de.codesourcery.chip8.asm.ast.StatementNode;
 import de.codesourcery.chip8.asm.ast.TextNode;
 import de.codesourcery.chip8.asm.ast.TextRegion;
 import org.apache.commons.lang3.StringUtils;
@@ -98,7 +101,7 @@ public class Parser
 
     private ASTNode internalParse() {
 
-        final ASTNode ast = new ASTNode();
+        final ASTNode ast = new AST();
         while ( ! lexer.eof() )
         {
             skipNewlines();
@@ -132,7 +135,7 @@ public class Parser
 
     private ASTNode parseStatement()
     {
-        final ASTNode statement = new ASTNode();
+        final ASTNode statement = new StatementNode();
         final ASTNode label = parseLabel();
         if ( label != null ) {
             statement.add( label );
@@ -381,7 +384,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 final int regNum = Integer.parseInt( lexer.next().value.substring( 1 ) );
                 return new RegisterNode( regNum, tok.region() );
             case IDENTIFIER:
-                return new IdentifierNode( Identifier.of( lexer.next().value ), tok.region() );
+                return parseIdentifierOrMacroInvocation();
             case TEXT:
                 return new TextNode( lexer.next().value, tok.region() );
             default:
@@ -445,9 +448,14 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
         if ( result != null ) {
             return result;
         }
-        final Token tok = lexer.peek();
 
-        if ( tok.is(TokenType.TEXT) ) {
+        final Token tok = lexer.peek();
+        if ( isMacroInvocation( tok ) )
+        {
+            return parseIdentifierOrMacroInvocation();
+        }
+        if ( tok.is(TokenType.TEXT) )
+        {
             Instruction match= Stream.of( Instruction.values() ).filter(  x->x.mnemonic.equalsIgnoreCase( tok.value) ).findFirst().orElse( null );
             if ( match != null )
             {
@@ -531,10 +539,10 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             skipNewlines();
 
             final int bodyStartOffset = lexer.peek().offset;
-            while ( ! lexer.eof() && ! lexer.peek().is(TokenType.NEWLINE) ) {
-                buffer.append( lexer.next().value );
+            body = parseExpression();
+            if ( body == null ) {
+                error("Expected an expression");
             }
-            body = parseMacroBody( buffer.toString(), bodyStartOffset, true);
         }
         else
         {
@@ -551,7 +559,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             while ( ! lexer.eof() && ! lexer.peek().is(TokenType.CURLY_PARENS_CLOSE) ) {
                 buffer.append( lexer.next().value );
             }
-            body = parseMacroBody( buffer.toString(), bodyStartOffset,false );
+            body = parseMacroBody( buffer.toString(), bodyStartOffset );
             if ( lexer.peek().is(TokenType.CURLY_PARENS_CLOSE ) ) {
                 lexer.next(); // consume '}'
             } else {
@@ -565,11 +573,11 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
         return result;
     }
 
-    private ASTNode parseMacroBody(String body, int bodyStartOffset, boolean isExpression) {
+    private ASTNode parseMacroBody(String body, int bodyStartOffset) {
 
         final Assembler.CompilationContext tmpCtx = new Assembler.CompilationContext(new ExecutableWriter());
         final Parser p = new Parser(new Lexer(new Scanner(body)),tmpCtx);
-        final ASTNode result = isExpression ? p.parseExpression() : p.parse();
+        final ASTNode result = p.parse();
 
         // fix (error) message offsets
         tmpCtx.messages.stream()
@@ -713,6 +721,57 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 error("'"+tok.value+"' is a reserved identifier and cannot be used here : "+tok);
             }
             return new IdentifierNode( Identifier.of( tok.value ), tok.region() );
+        }
+        return null;
+    }
+
+    private boolean isMacroInvocation(Token token)
+    {
+        if ( token.is(TokenType.IDENTIFIER)) {
+            final Identifier id = Identifier.of( lexer.peek().value );
+            final SymbolTable.Symbol symbol = context.symbolTable.get( SymbolTable.GLOBAL_SCOPE, id );
+            return symbol != null && symbol.hasType( SymbolTable.Symbol.Type.MACRO );
+        }
+        return false;
+    }
+
+    private ASTNode parseIdentifierOrMacroInvocation()
+    {
+        if ( lexer.peek().is(TokenType.IDENTIFIER) )
+        {
+            final Token idToken = lexer.next();
+            if (Identifier.isReserved( idToken.value ) ) {
+                error("'"+idToken.value+"' is a reserved identifier and cannot be used here");
+            }
+            final Identifier id = Identifier.of( idToken.value );
+            final IdentifierNode idNode = new IdentifierNode( id, idToken.region() );
+
+            final SymbolTable.Symbol symbol = context.symbolTable.get( SymbolTable.GLOBAL_SCOPE, id );
+            if ( symbol == null || !symbol.hasType( SymbolTable.Symbol.Type.MACRO ) )
+            {
+                return idNode;
+            }
+
+            final MacroInvocationNode inv = new MacroInvocationNode();
+            inv.add( idNode );
+            final boolean expectParensClose = lexer.peek().is( TokenType.PARENS_OPEN );
+            if ( expectParensClose )
+            {
+                lexer.next(); // consume '('
+            }
+            inv.add( parseExpressionList( false ) );
+            if ( expectParensClose )
+            {
+                if ( !lexer.peek().is( TokenType.PARENS_CLOSE ) )
+                {
+                    error( "Expected closing parentheses" );
+                }
+                else
+                {
+                    lexer.next(); // consume ')'
+                }
+            }
+            return inv;
         }
         return null;
     }

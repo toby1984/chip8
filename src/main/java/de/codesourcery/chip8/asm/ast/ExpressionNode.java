@@ -7,6 +7,12 @@ public class ExpressionNode extends ASTNode
     }
 
     @Override
+    public ASTNode copyThisNode()
+    {
+        return new ExpressionNode(getRegionCopy());
+    }
+
+    @Override
     public String toString()
     {
         return "Expression";

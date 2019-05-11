@@ -30,6 +30,12 @@ public class DirectiveNode extends ASTNode
     }
 
     @Override
+    public ASTNode copyThisNode()
+    {
+        return new DirectiveNode(this.type,getRegionCopy());
+    }
+
+    @Override
     public String toString()
     {
         return "Directive [ "+type+" ]";

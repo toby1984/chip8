@@ -801,6 +801,7 @@ public class MainFrame extends JFrame
             private final JButton load = new JButton("Load");
             private final JButton save = new JButton("Save");
             private final JButton help = new JButton("Syntax Help");
+            private final JButton showASTViewer = new JButton("AST viewer");
 
             private final JFrame helpFrame = new JFrame("help")
             {
@@ -864,6 +865,7 @@ public class MainFrame extends JFrame
                 }
             };
 
+            private final ASTViewer astViewer = new ASTViewer();
             private final Thread highlightThread;
             private final Object DOC_LOCK = new Object();
             private boolean documentChanged = true;
@@ -991,6 +993,9 @@ public class MainFrame extends JFrame
                                         catch(Exception e) {
                                             return;
                                         }
+
+                                        astViewer.setAST( ast );
+
                                         final StyledDocument document = document();
                                         document.setCharacterAttributes(0,text.length(),
                                                 document.getStyle( "defaultStyle" ),true );
@@ -1059,6 +1064,18 @@ public class MainFrame extends JFrame
 
                 getContentPane().setLayout( new GridBagLayout());
 
+                showASTViewer.addActionListener(  ev ->
+                {
+                        if ( astViewer.isVisible() )
+                        {
+                            astViewer.setVisible( false );
+                        }
+                        else
+                        {
+                            astViewer.setVisible( true );
+                        }
+                });
+
                 help.addActionListener( ev -> {
                     if ( helpFrame.isVisible() ) {
                         helpFrame.setVisible( false );
@@ -1106,6 +1123,7 @@ public class MainFrame extends JFrame
                 buttons.add( load );
                 buttons.add( save );
                 buttons.add( help );
+                buttons.add( showASTViewer );
 
                 GridBagConstraints cnstrs = new GridBagConstraints();
                 cnstrs.gridx = 0; cnstrs.gridy = 0;

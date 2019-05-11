@@ -17,6 +17,12 @@ public class MacroDeclarationNode extends DirectiveNode
         super( Type.MACRO, region );
     }
 
+    @Override
+    public ASTNode copyThisNode()
+    {
+        return new MacroDeclarationNode(getRegionCopy());
+    }
+
     public Identifier name() {
         return ((IdentifierNode) child(0)).identifier;
     }
@@ -33,5 +39,11 @@ public class MacroDeclarationNode extends DirectiveNode
     public int parameterCount()
     {
         return hasParameters() ? getParameterList().childCount() : 0;
+    }
+
+    @Override
+    public String toString()
+    {
+        return "MacroDeclaration";
     }
 }

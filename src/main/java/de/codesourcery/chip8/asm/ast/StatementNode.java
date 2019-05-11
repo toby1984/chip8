@@ -26,6 +26,12 @@ public class StatementNode extends ASTNode
     }
 
     @Override
+    public ASTNode copyThisNode()
+    {
+        return new StatementNode();
+    }
+
+    @Override
     public String toString()
     {
         return "StatementNode";

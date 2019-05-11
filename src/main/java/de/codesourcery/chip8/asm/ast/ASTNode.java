@@ -26,7 +26,7 @@ import java.util.function.Predicate;
  *
  * @author tobias.gierke@code-sourcery.de
  */
-public class ASTNode
+public abstract class ASTNode
 {
     /**
      * AST node visitor.
@@ -63,18 +63,28 @@ public class ASTNode
     /**
      * Returns the source region covered by this specific AST node.
      *
-     * @return
+     * @return this node's region (may be NULL)
      */
-    public TextRegion getRegion()
+    public final TextRegion getRegion()
     {
         return region;
+    }
+
+    /**
+     * Returns a copy of this node's region (if any).
+     *
+     * @return copy of this node's region or <code>null</code>
+     * @see #getRegion()
+     */
+    public final TextRegion getRegionCopy() {
+        return region == null ? null : region.createCopy();
     }
 
     /**
      * Returns the source region covered by this specific AST node and all of its child nodes (if any).
      * @return
      */
-    public TextRegion getCombinedRegion()
+    public final TextRegion getCombinedRegion()
     {
         TextRegion result = region == null ? null : region.createCopy();
         for ( ASTNode child : children )
@@ -94,10 +104,20 @@ public class ASTNode
      *
      * @param node
      */
-    public void add(ASTNode node)
+    public final void add(ASTNode node)
     {
         node.parent = this;
         this.children.add( node );
+    }
+
+    /**
+     * Add multiple children.
+     *
+     * @param toAdd
+     */
+    public final void add(List<ASTNode> toAdd)
+    {
+        toAdd.forEach( this::add );
     }
 
     /**
@@ -105,7 +125,7 @@ public class ASTNode
      *
      * @return
      */
-    public int childCount() {
+    public final int childCount() {
         return children.size();
     }
 
@@ -115,7 +135,7 @@ public class ASTNode
      * @param idx
      * @return
      */
-    public ASTNode child(int idx) {
+    public final ASTNode child(int idx) {
         return children.get(idx);
     }
 
@@ -129,17 +149,17 @@ public class ASTNode
      * Traverse the subtree starting at this node in-order.
      * @param visitor
      */
-    public void visitInOrder(Visitor visitor) {
+    public final void visitInOrder(Visitor visitor) {
         visitInOrder(visitor,0);
     }
 
-    private void visitInOrder(Visitor visitor, int depth)
+    private final void visitInOrder(Visitor visitor, int depth)
     {
         visitor.visit( this, depth );
         children.forEach( c -> c.visitInOrder( visitor, depth+1 ) );
     }
 
-    public String toPrettyString() {
+    public final String toPrettyString() {
         final StringBuilder buffer = new StringBuilder();
         visitInOrder( (node,depth) -> {
            buffer.
@@ -150,11 +170,21 @@ public class ASTNode
         return buffer.toString();
     }
 
-    public boolean hasNoChildren() {
+    public final boolean hasNoChildren() {
         return children.isEmpty();
     }
 
-    public boolean hasChildren() {
+    public final boolean hasChildren() {
         return ! children.isEmpty();
     }
+
+    public final ASTNode createCopy() {
+        final ASTNode result = copyThisNode();
+        for ( ASTNode child : children ) {
+            result.add( child.createCopy() );
+        }
+        return result;
+    }
+
+    public abstract ASTNode copyThisNode();
 }
