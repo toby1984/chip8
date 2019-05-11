@@ -186,5 +186,17 @@ public abstract class ASTNode
         return result;
     }
 
+    public void replaceWith(ASTNode other) {
+        if ( parent == null ) {
+            throw new IllegalStateException( "Can't invoke replaceWith() on a node with no parent" );
+        }
+        final int idx = parent.children.indexOf(this);
+        if ( idx == -1 ) {
+            throw new IllegalStateException( "Failed to find myself in parent node?" );
+        }
+        parent.children.set(idx,other);
+        other.parent = parent;
+    }
+
     public abstract ASTNode copyThisNode();
 }

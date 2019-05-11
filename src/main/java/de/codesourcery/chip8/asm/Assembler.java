@@ -20,6 +20,7 @@ import de.codesourcery.chip8.asm.ast.DirectiveNode;
 import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.InstructionNode;
 import de.codesourcery.chip8.asm.ast.LabelNode;
+import de.codesourcery.chip8.asm.ast.MacroInvocationNode;
 import de.codesourcery.chip8.asm.ast.RegisterNode;
 import de.codesourcery.chip8.asm.ast.TextRegion;
 import de.codesourcery.chip8.asm.parser.Lexer;
@@ -141,9 +142,14 @@ public class Assembler
             System.out.println( StringUtils.repeat( ' ', depth ) + " " + node );
         });
 
+        // expand macro invocations
+        if ( ! compilationContext.hasErrors() ) {
+            ast.visitInOrder( new ExpandMacrosPhase() );
+        }
+
+        // assign addresses to labels
         if ( ! compilationContext.hasErrors() )
         {
-            // assign addresses to labels
             ast.visitInOrder( new AssignSymbolsPhase() );
         }
 
@@ -281,6 +287,44 @@ public class Assembler
         public boolean hasErrors()
         {
             return messages.hasErrors();
+        }
+    }
+
+    public final class ExpandMacrosPhase extends CompilationPhase {
+
+        @Override
+        public void visit(ASTNode node, int depth)
+        {
+            if ( node instanceof MacroInvocationNode )
+            {
+                final Set<Identifier> alreadyExpanded = new HashSet<>();
+                final ASTNode expanded = expandRecursively( (MacroInvocationNode) node, alreadyExpanded );
+                node.replaceWith( expanded );
+            }
+        }
+
+        private ASTNode expandRecursively( MacroInvocationNode invocation, Set<Identifier> alreadyExpanded )
+        {
+            if ( alreadyExpanded.contains( invocation.getMacroName() ) ) {
+                compilationContext.error("Infinite recursion during macro expansion",invocation);
+                return invocation;
+            }
+            System.out.println("==== Expanding "+invocation.getMacroName()+" ====");
+            System.out.println( invocation.toPrettyString() );
+
+            alreadyExpanded.add( invocation.getMacroName() );
+            final ASTNode body = Parser.expandMacroInvocation( invocation, compilationContext );
+            body.visitInOrder( (n,depth) ->
+            {
+                if ( n instanceof MacroInvocationNode )
+                {
+                    ASTNode expanded = expandRecursively( (MacroInvocationNode) n, alreadyExpanded );
+                    n.replaceWith( expanded );
+                }
+            });
+            System.out.println("==== Expanded "+invocation.getMacroName()+" ====");
+            System.out.println( body.toPrettyString() );
+            return body;
         }
     }
 

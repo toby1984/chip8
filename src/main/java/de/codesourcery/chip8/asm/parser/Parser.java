@@ -41,7 +41,9 @@ import de.codesourcery.chip8.asm.ast.TextRegion;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -571,6 +573,61 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             result.add( body );
         }
         return result;
+    }
+
+    public static ASTNode expandMacroInvocation(MacroInvocationNode macroInvocation, Assembler.CompilationContext context)
+    {
+        // look up macro declaration
+        final SymbolTable.Symbol symbol = context.symbolTable.get( SymbolTable.GLOBAL_SCOPE, macroInvocation.getMacroName() );
+        if ( ! symbol.hasType( SymbolTable.Symbol.Type.MACRO ) ) {
+            throw new IllegalStateException("Expected macro symbol '"+macroInvocation.getMacroName().value+"' but got "+symbol);
+        }
+        MacroDeclarationNode decl = (MacroDeclarationNode) symbol.value;
+        if ( decl == null ) {
+            throw new IllegalStateException("Missing declaration for macro symbol '"+macroInvocation.getMacroName().value+"'");
+        }
+
+        // create copy of macro body AST
+        ASTNode bodyCopy = decl.getMacroBody();
+        if ( bodyCopy == null )
+        {
+            context.error("No macro body for "+symbol,macroInvocation);
+            return macroInvocation;
+        }
+        bodyCopy = bodyCopy.createCopy();
+
+        // check number of invocation arguments matches number of macro parameters
+        if ( macroInvocation.getArguments().size() != decl.parameterCount() ) {
+            context.error("Wrong number of macro arguments, expected "+
+                    decl.parameterCount()+" but found "+macroInvocation.getArguments().size(), macroInvocation);
+            return macroInvocation;
+        }
+        // map parameter names to parameter indices
+        final MacroParameterList parameterList = decl.getParameterList();
+        final Map<Identifier,Integer> paramIndexByName = new HashMap<>();
+        int index = 0;
+        for ( ASTNode child : decl.getParameterList().children ) {
+            if ( !(child instanceof IdentifierNode ) ) {
+                context.error("Macro "+symbol.name.value+" has bad parameter list,expected an identifier",child);
+            }
+            final Identifier paramName = ((IdentifierNode) child).identifier;
+            Integer existing = paramIndexByName.put( paramName, index++);
+            if ( existing != null ) {
+                context.error("Macro "+symbol.name.value+" has duplicate parameter name '"+paramName.value+"'",child);
+            }
+        }
+        // replace parameter references with actual values
+        bodyCopy.visitInOrder( (n,depth) ->
+        {
+                if ( n instanceof IdentifierNode)
+                {
+                    Integer idx = paramIndexByName.get( ((IdentifierNode) n).identifier );
+                    if ( idx != null ) { // substitute with parameter
+                        n.replaceWith( parameterList.child( idx ).createCopy() );
+                    }
+                }
+        });
+        return bodyCopy;
     }
 
     private ASTNode parseMacroBody(String body, int bodyStartOffset) {
