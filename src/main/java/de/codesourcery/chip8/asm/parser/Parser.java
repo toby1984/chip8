@@ -557,11 +557,19 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
             skipNewlines(); // consume leading newlines so expression parsing doesn't fail
 
-            final int bodyStartOffset = lexer.peek().offset;
-            while ( ! lexer.eof() && ! lexer.peek().is(TokenType.CURLY_PARENS_CLOSE) ) {
-                buffer.append( lexer.next().value );
+            lexer.setSkipWhitespace( false);
+            try
+            {
+                final int bodyStartOffset = lexer.peek().offset;
+                while ( !lexer.eof() && !lexer.peek().is( TokenType.CURLY_PARENS_CLOSE ) )
+                {
+                    buffer.append( lexer.next().value );
+                }
+                body = parseMacroBody( buffer.toString(), bodyStartOffset );
             }
-            body = parseMacroBody( buffer.toString(), bodyStartOffset );
+            finally {
+                lexer.setSkipWhitespace( true );
+            }
             if ( lexer.peek().is(TokenType.CURLY_PARENS_CLOSE ) ) {
                 lexer.next(); // consume '}'
             } else {
@@ -595,6 +603,31 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             return macroInvocation;
         }
         bodyCopy = bodyCopy.createCopy();
+
+        // replace all labels with newly generated ones
+        final Map<Identifier,Identifier> labelMappings = new HashMap<>();
+        bodyCopy.visitInOrder( (n,depth) ->
+        {
+            if ( n instanceof LabelNode ) {
+                final Identifier oldId = ((LabelNode) n).id;
+                final Identifier newId = context.generateUniqueIdentifier();
+                context.symbolTable.declare( SymbolTable.GLOBAL_SCOPE, newId, SymbolTable.Symbol.Type.LABEL );
+                labelMappings.put( oldId, newId );
+            }
+        });
+
+        // rewrite all references to old labels to refer to the new ones instead
+        bodyCopy.visitInOrder( (n,depth ) -> {
+           if ( n instanceof IdentifierNode)
+           {
+               final Identifier id = ((IdentifierNode) n).identifier;
+               final Identifier replacement = labelMappings.get( id );
+               if ( replacement != null )
+               {
+                   ((IdentifierNode) n).identifier = replacement;
+               }
+           }
+        });
 
         // check number of invocation arguments matches number of macro parameters
         if ( macroInvocation.getArguments().size() != decl.parameterCount() ) {
@@ -645,6 +678,9 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             final TextRegion region = node.getRegion();
             if ( region != null ) {
                 region.setStartingOffset( region.getStartingOffset()+bodyStartOffset );
+            }
+            if ( node instanceof LabelNode && ((LabelNode) node).isLocal ) {
+                context.error("Macros may only use global labels (will be rewritten as necessary)",node);
             }
         });
         return result;

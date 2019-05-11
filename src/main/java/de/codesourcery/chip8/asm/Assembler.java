@@ -47,6 +47,7 @@ import java.util.function.Predicate;
  */
 public class Assembler
 {
+    private static long globalUniqueIdentifier = 0;
     private CompilationContext compilationContext;
 
     public static final class NOPOutputStream extends OutputStream {
@@ -174,7 +175,6 @@ public class Assembler
         Identifier lastGlobalLabel = SymbolTable.GLOBAL_SCOPE;
         public final CompilationMessages messages = new CompilationMessages();
         int currentAddress;
-        private int globalUniqueIdentifier = 0;
 
         public CompilationContext(ExecutableWriter writer)
         {
@@ -186,7 +186,7 @@ public class Assembler
             return lastGlobalLabel == null ? SymbolTable.GLOBAL_SCOPE : lastGlobalLabel;
         }
 
-        public Identifier generateUniqueGlobalIdentifier()
+        public Identifier generateUniqueIdentifier()
         {
             return Identifier.of( "tmp_"+(globalUniqueIdentifier++));
         }

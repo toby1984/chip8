@@ -29,6 +29,8 @@ import java.util.regex.Pattern;
  */
 public final class Lexer
 {
+    private static final boolean DEBUG = true;
+
     private static final Pattern BINARY_NUMBER = Pattern.compile("%[01]+");
     private static final Pattern DECIMAL_NUMBER = Pattern.compile("[0-9]+");
     private static final Pattern HEX_NUMBER = Pattern.compile("0[xX][0-9a-fA-F]+");
@@ -84,7 +86,14 @@ public final class Lexer
         return c == ' ' || c == '\t';
     }
 
-    private void parse()
+    private void parse() {
+        doParse();
+        if ( DEBUG )
+        {
+            System.out.println( "LEXER: " + tokens.get( 0 ) );
+        }
+    }
+    private void doParse()
     {
         while ( skipWhitespace && ! scanner.eof() && isWhitespace( scanner.peek() ) ) {
             scanner.next();
@@ -97,9 +106,10 @@ public final class Lexer
             if ( isWhitespace( c ) )
             {
                 parseBuffer(startOffset);
-                if ( ! skipWhitespace ) {
+                if ( ! skipWhitespace )
+                {
                     scanner.next();
-                    tokens.add( new Token( TokenType.WHITESPACE, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.WHITESPACE, c, scanner.offset()-1 ) );
                 }
                 return;
             }
@@ -137,57 +147,57 @@ public final class Lexer
                 case '^':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.OPERATOR, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.OPERATOR, c, scanner.offset()-1 ) );
                     return;
                 case '{':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.CURLY_PARENS_OPEN, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.CURLY_PARENS_OPEN, c, scanner.offset()-1 ) );
                     return;
                 case '}':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.CURLY_PARENS_CLOSE, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.CURLY_PARENS_CLOSE, c, scanner.offset()-1 ) );
                     return;
                 case '=':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.EQUALS, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.EQUALS, c, scanner.offset()-1 ) );
                     return;
                 case '.':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.DOT, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.DOT, c, scanner.offset()-1 ) );
                     return;
                 case '(':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.PARENS_OPEN, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.PARENS_OPEN, c, scanner.offset()-1 ) );
                     return;
                 case ')':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.PARENS_CLOSE, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.PARENS_CLOSE, c, scanner.offset()-1 ) );
                     return;
                 case '\n':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.NEWLINE, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.NEWLINE, c, scanner.offset()-1 ) );
                     return;
                 case ',':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.COMMA, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.COMMA, c, scanner.offset()-1 ) );
                     return;
                 case ':':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.COLON, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.COLON, c, scanner.offset()-1 ) );
                     return;
                 case ';':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.SEMICOLON, c, scanner.offset() ) );
+                    tokens.add( new Token( TokenType.SEMICOLON, c, scanner.offset()-1 ) );
                     return;
             }
             buffer.append( scanner.next() );

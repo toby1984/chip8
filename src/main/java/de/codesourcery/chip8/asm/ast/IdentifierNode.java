@@ -5,7 +5,7 @@ import org.apache.commons.lang3.Validate;
 
 public class IdentifierNode extends ASTNode
 {
-    public final Identifier identifier;
+    public Identifier identifier;
 
     public IdentifierNode(Identifier identifier, TextRegion region)
     {

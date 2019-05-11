@@ -68,6 +68,13 @@ public class LexerTest extends TestCase
         assertEquals(TokenType.EOF, tokens.get(6).type );
     }
 
+    public void testLexMacro() {
+        List<Token> tokens = lex(".macro test {\n" +
+                "\n" +
+                "}");
+        tokens.forEach( System.out::println );
+    }
+
     public void test1() {
 
         List<Token> tokens = lex("test:");
