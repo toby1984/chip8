@@ -70,6 +70,17 @@ public class SymbolTable
             this.value = value;
         }
 
+        @Override
+        public String toString()
+        {
+            return "Symbol{" +
+                    "scope=" + scope +
+                    ", name=" + name +
+                    ", type=" + type +
+                    ", value=" + value +
+                    '}';
+        }
+
         public boolean isDefined()
         {
             return type != null && value != null;

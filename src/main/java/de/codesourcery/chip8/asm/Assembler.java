@@ -487,12 +487,19 @@ public class Assembler
                 }
                 else
                 {
-                    final SymbolTable.Symbol symbol = compilationContext.symbolTable.define(
-                            SymbolTable.GLOBAL_SCOPE,
-                            ln.id,
-                            SymbolTable.Symbol.Type.LABEL,
-                            compilationContext.currentAddress );
-                    compilationContext.lastGlobalLabel = symbol.name;
+                    try
+                    {
+                        final SymbolTable.Symbol symbol = compilationContext.symbolTable.define(
+                                SymbolTable.GLOBAL_SCOPE,
+                                ln.id,
+                                SymbolTable.Symbol.Type.LABEL,
+                                compilationContext.currentAddress );
+                        compilationContext.lastGlobalLabel = symbol.name;
+                    }
+                    catch (Exception e)
+                    {
+                        compilationContext.error( e.getMessage(), node );
+                    }
                 }
             }
             else if ( node instanceof InstructionNode )
