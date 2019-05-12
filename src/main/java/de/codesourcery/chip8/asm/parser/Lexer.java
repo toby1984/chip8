@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
  */
 public final class Lexer
 {
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
 
     private static final Pattern BINARY_NUMBER = Pattern.compile("%[01]+");
     private static final Pattern DECIMAL_NUMBER = Pattern.compile("[0-9]+");
@@ -90,7 +90,7 @@ public final class Lexer
         doParse();
         if ( DEBUG )
         {
-            System.out.println( "LEXER: " + tokens.get( 0 ) );
+            tokens.forEach( tok -> System.out.println( "LEXER: " + tok ) );
         }
     }
     private void doParse()
@@ -118,6 +118,11 @@ public final class Lexer
                 case '>':
                     int start = scanner.offset();
                     scanner.next();
+                    if ( ! scanner.eof() && scanner.peek() != '>' ) {
+                        parseBuffer(startOffset);
+                        tokens.add( new Token( TokenType.OPERATOR, ">", start ) );
+                        return;
+                    }
                     if ( scanner.eof() || scanner.peek() != '>' ) {
                         scanner.back();
                         break;
@@ -129,6 +134,11 @@ public final class Lexer
                 case '<':
                     start = scanner.offset();
                     scanner.next();
+                    if ( ! scanner.eof() && scanner.peek() != '<' ) {
+                        parseBuffer(startOffset);
+                        tokens.add( new Token( TokenType.OPERATOR, "<", start ) );
+                        return;
+                    }
                     if ( scanner.eof() || scanner.peek() != '<' ) {
                         scanner.back();
                         break;
@@ -137,13 +147,33 @@ public final class Lexer
                     scanner.next();
                     tokens.add( new Token( TokenType.OPERATOR, "<<", start ) );
                     return;
+                case '&':
+                    start = scanner.offset();
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    if ( ! scanner.eof() && scanner.peek() == '&' ) {
+                        scanner.next();
+                        tokens.add( new Token( TokenType.OPERATOR, "&&", start ) );
+                        return;
+                    }
+                    tokens.add( new Token( TokenType.OPERATOR, "&", start ) );
+                    return;
+                case '|':
+                    start = scanner.offset();
+                    parseBuffer(startOffset);
+                    scanner.next();
+                    if ( ! scanner.eof() && scanner.peek() == '|' ) {
+                        scanner.next();
+                        tokens.add( new Token( TokenType.OPERATOR, "||", start ) );
+                        return;
+                    }
+                    tokens.add( new Token( TokenType.OPERATOR, "|", start ) );
+                    return;
                 case '+':
                 case '-':
                 case '*':
                 case '~':
                 case '/':
-                case '&':
-                case '|':
                 case '^':
                     parseBuffer(startOffset);
                     scanner.next();
@@ -159,10 +189,25 @@ public final class Lexer
                     scanner.next();
                     tokens.add( new Token( TokenType.CURLY_PARENS_CLOSE, c, scanner.offset()-1 ) );
                     return;
+                case '!':
+                    scanner.next();
+                    if ( ! scanner.eof() && scanner.peek() == '=' ) {
+                        scanner.next();
+                        parseBuffer(startOffset);
+                        tokens.add( new Token( TokenType.OPERATOR, "!=", scanner.offset() - 1 ) );
+                        return;
+                    }
+                    scanner.back();
+                    break;
                 case '=':
                     parseBuffer(startOffset);
                     scanner.next();
-                    tokens.add( new Token( TokenType.EQUALS, c, scanner.offset()-1 ) );
+                    if ( ! scanner.eof() && scanner.peek() == '=' ) {
+                        scanner.next();
+                        tokens.add( new Token( TokenType.OPERATOR, "==", scanner.offset() - 1 ) );
+                        return;
+                    }
+                    tokens.add( new Token( TokenType.ASSIGNMENT, "=", scanner.offset() - 1 ) );
                     return;
                 case '.':
                     parseBuffer(startOffset);

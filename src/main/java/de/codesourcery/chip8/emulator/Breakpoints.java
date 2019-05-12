@@ -73,18 +73,19 @@ public final class Breakpoints
         return isTemporary ? temporary : permanent;
     }
 
-    public boolean checkBreakpointHit(int address)
+    public boolean checkBreakpointHit(int address,EmulatorDriver driver)
     {
         if ( size == 0 ) {
             return false;
         }
         Breakpoint hit = temporary.get(address);
-        if ( hit != null )
+        if ( hit != null && hit.matcher.matches( driver ) )
         {
             remove(hit);
             return true;
         }
-        return permanent.containsKey(address);
+        hit = permanent.get(address);
+        return hit != null && hit.matcher.matches( driver );
     }
 
     public void clear()

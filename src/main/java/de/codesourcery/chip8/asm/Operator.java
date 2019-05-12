@@ -1,9 +1,64 @@
 package de.codesourcery.chip8.asm;
 
 import java.util.List;
+import java.util.Objects;
 
 public enum Operator
 {
+    // logical operators
+    EQUALS(2) {
+        @Override
+        public Object doEvaluate(List<Object> values)
+        {
+            return Objects.equals( values.get(0) , values.get(1) );
+        }
+    },
+    NOT_EQUALS(2) {
+        @Override
+        public Object doEvaluate(List<Object> values)
+        {
+            return ! Objects.equals( values.get(0) , values.get(1) );
+        }
+    },
+    LESS_THAN(2) {
+        @Override
+        public Object doEvaluate(List<Object> values)
+        {
+            return intValue( values.get(0) ) < intValue( values.get(1) );
+        }
+    },
+    GREATER_THAN(2) {
+        @Override
+        public Object doEvaluate(List<Object> values)
+        {
+            return intValue( values.get(0) ) > intValue( values.get(1) );
+        }
+    },
+    LOGICAL_AND(2) {
+        @Override
+        public Object doEvaluate(List<Object> values)
+        {
+            return boolValue( values.get(0) ) && boolValue( values.get(1) );
+        }
+
+        @Override
+        protected void checkArgumentTypes(List<Object> values) {
+            assertAllBooleanOperands( values );
+        }
+    },
+    LOGICAL_OR(2) {
+        @Override
+        public Object doEvaluate(List<Object> values)
+        {
+            return boolValue( values.get(0) ) || boolValue( values.get(1) );
+        }
+
+        @Override
+        protected void checkArgumentTypes(List<Object> values) {
+            assertAllBooleanOperands( values );
+        }
+    },
+    // numeric operators
     PLUS(2) {
         @Override
         public Object doEvaluate(List<Object> values)
@@ -86,7 +141,22 @@ public enum Operator
 
     public static Operator parseOperator(String s)
     {
-        switch( s ) {
+        switch( s )
+        {
+            // logical operators
+            case "==":
+                return EQUALS;
+            case "!=":
+                return NOT_EQUALS;
+            case "<":
+                return LESS_THAN;
+            case ">":
+                return GREATER_THAN;
+            case "&&":
+                return LOGICAL_AND;
+            case "||":
+                return LOGICAL_OR;
+            // numeric operators
             case "&":
                 return BITWISE_AND;
             case "|":
@@ -115,11 +185,23 @@ public enum Operator
         return ((Number) object).intValue();
     }
 
+    private static boolean boolValue(Object object) {
+        return ((Boolean) object).booleanValue();
+    }
+
     public Object evaluate(List<Object> values)
     {
-        assertOperandCount( values );
-        assertAllNumericOperands( values );
+        checkArgumentCount( values );
+        checkArgumentTypes( values );
         return doEvaluate( values );
+    }
+
+    protected void checkArgumentCount(List<Object> values) {
+        assertOperandCount( values );
+    }
+
+    protected void checkArgumentTypes(List<Object> values) {
+        assertAllNumericOperands( values );
     }
 
     protected abstract Object doEvaluate(List<Object> values);
@@ -144,6 +226,19 @@ public enum Operator
             {
                 throw new IllegalArgumentException( "Operator " + this + " supports only numeric arguments but " +
                                                     "argument no. "+(i+1)+" was "+value );
+            }
+        }
+    }
+
+    protected void assertAllBooleanOperands(List<Object> values)
+    {
+        for (int i = 0; i < values.size(); i++)
+        {
+            Object value = values.get( i );
+            if ( !(value instanceof Boolean) )
+            {
+                throw new IllegalArgumentException( "Operator " + this + " supports only boolean arguments but " +
+                        "argument no. "+(i+1)+" was "+value );
             }
         }
     }

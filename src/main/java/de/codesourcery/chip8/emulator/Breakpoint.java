@@ -16,6 +16,7 @@
 package de.codesourcery.chip8.emulator;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * A breakpoint.
@@ -29,13 +30,59 @@ import java.util.Objects;
  */
 public final class Breakpoint
 {
+    public static final IMatcher ALWAYS_TRUE = new IMatcher()
+    {
+        /**
+         * Checks whether this breakpoint is actually hit.
+         *
+         * @param driver
+         * @return
+         */
+        @Override
+        public boolean matches(EmulatorDriver driver)
+        {
+            return true;
+        }
+
+        /**
+         * Returns this matcher's expression for display on the UI.
+         *
+         * @return matcher expression. Two matchers with the same expression are always considered to be
+         * equal/interchangeable.
+         */
+        @Override
+        public String getExpression()
+        {
+            return "";
+        }
+    };
+
     public final int address;
     public final boolean isTemporary;
+    public final IMatcher matcher;
 
-    public Breakpoint(int address, boolean isTemporary)
+    /**
+     * Matcher used to check secondary conditions (register contents etc) before
+     * a breakpoint is declared as being 'hit'.
+     *
+     * @author tobias.gierke@code-sourcery.de
+     */
+    public interface IMatcher
+    {
+        boolean matches(EmulatorDriver driver);
+
+        String getExpression();
+    }
+
+    public Breakpoint(int address, boolean isTemporary) {
+        this(address,isTemporary,ALWAYS_TRUE);
+    }
+
+    public Breakpoint(int address, boolean isTemporary,IMatcher matcher)
     {
         this.address = address;
         this.isTemporary = isTemporary;
+        this.matcher = matcher;
     }
 
     @Override
@@ -43,7 +90,8 @@ public final class Breakpoint
     {
         if ( o instanceof Breakpoint) {
             return this.address == ((Breakpoint) o).address &&
-                    this.isTemporary == ((Breakpoint) o).isTemporary;
+                   this.isTemporary == ((Breakpoint) o).isTemporary &&
+                   this.matcher.getExpression().equals( ((Breakpoint) o).matcher.getExpression() );
         }
         return false;
     }
@@ -51,7 +99,7 @@ public final class Breakpoint
     @Override
     public int hashCode()
     {
-        return Objects.hash( address, isTemporary );
+        return Objects.hash( address, isTemporary, matcher.getExpression() );
     }
 
     @Override

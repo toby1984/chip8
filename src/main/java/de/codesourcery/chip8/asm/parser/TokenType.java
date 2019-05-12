@@ -23,7 +23,7 @@ public enum TokenType
 {
     TEXT, // anything that's not one of the other tokens
     IDENTIFIER,
-    EQUALS, // '='
+    ASSIGNMENT, // '='
     // numbers
     PARENS_OPEN, // (
     PARENS_CLOSE, // )

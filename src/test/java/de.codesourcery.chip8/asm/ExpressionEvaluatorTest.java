@@ -22,6 +22,37 @@ public class ExpressionEvaluatorTest
     }
 
     @Test
+    public void testGreaterThan() {
+        assertEquals( Boolean.TRUE, ExpressionEvaluator.evaluate( parse( "2 > 1" ), context, true ) );
+    }
+
+    @Test
+    public void testLessThan() {
+        assertEquals( Boolean.TRUE, ExpressionEvaluator.evaluate( parse( "3 < 4" ), context, true ) );
+    }
+
+    @Test
+    public void testEquals() {
+        assertEquals( Boolean.TRUE, ExpressionEvaluator.evaluate( parse( " 3 == 3" ), context, true ) );
+    }
+
+    @Test
+    public void testNotEquals() {
+        assertEquals( Boolean.TRUE, ExpressionEvaluator.evaluate( parse( " 3 != 4" ), context, true ) );
+    }
+
+    @Test
+    public void testLogicalAnd() {
+        assertEquals( Boolean.TRUE, ExpressionEvaluator.evaluate( parse( " 1==1 && 2==2" ), context, true ) );
+    }
+
+    @Test
+    public void testLogicalOr() {
+        assertEquals( Boolean.TRUE, ExpressionEvaluator.evaluate( parse( "1==2 || 3 < 4" ), context, true ) );
+    }
+
+
+    @Test
     public void testBitwiseXor() {
         assertEquals( 0b101 ^ 0b010, ExpressionEvaluator.evaluate( parse( "%101 ^ %010" ), context, true ) );
     }

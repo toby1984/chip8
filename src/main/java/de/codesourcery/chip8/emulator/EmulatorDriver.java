@@ -88,6 +88,7 @@ public class EmulatorDriver
          * Emulation started (unspecified).
          */
         STARTED,
+        RESET,
         /**
          * Emulation stopped because a breakpoint was hit.
          */
@@ -229,7 +230,6 @@ public class EmulatorDriver
                             }} );
                             return; /* stop thread */
                         case CHANGE_BREAKPOINTS:
-                            // hasEnabledBreakpoints = enabledBreakpoints.isNotEmpty();
                         case RUN:
                             continue;
                         case RESET:
@@ -238,7 +238,7 @@ public class EmulatorDriver
                             disabledBreakpoints.clearTemporary();
                             emulator.reset();
                             cmdQueue.reset();
-                            // hasEnabledBreakpoints = enabledBreakpoints.isNotEmpty();
+                            invokeStateListeners( Reason.RESET );
                             continue;
                         case STEP:
                             isStepping = true;
@@ -266,7 +266,7 @@ public class EmulatorDriver
                     }
                 }
 
-                if ( ! ignoreBreakpoint && enabledBreakpoints.checkBreakpointHit(emulator.pc ) )
+                if ( ! ignoreBreakpoint && enabledBreakpoints.checkBreakpointHit(emulator.pc,EmulatorDriver.this ) )
                 {
                     running = setRunning( running, false , Reason.STOPPED_BREAKPOINT);
                     continue;

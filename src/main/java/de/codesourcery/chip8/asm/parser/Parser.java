@@ -159,7 +159,59 @@ public class Parser
 
     public ASTNode parseExpression()
     {
-        return parseBitwiseOr();
+        return parseLogicalOr();
+    }
+
+    private ASTNode parseLogicalOr()
+    {
+        final ASTNode operand0 = parseLogicalAnd();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.LOGICAL_OR )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseLogicalAnd();
+                    if ( operand1 == null ) {
+                        error("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
+    }
+
+    private ASTNode parseLogicalAnd()
+    {
+        final ASTNode operand0 = parseBitwiseOr();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.LOGICAL_AND )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseBitwiseOr();
+                    if ( operand1 == null ) {
+                        error("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
     }
 
     private ASTNode parseBitwiseOr()
@@ -216,7 +268,7 @@ public class Parser
 
     private ASTNode parseBitwiseAnd()
     {
-        final ASTNode operand0 = parseBitshift();
+        final ASTNode operand0 = parseEqualsNotEquals();
         if ( operand0 != null )
         {
             Token tok = lexer.peek();
@@ -224,6 +276,84 @@ public class Parser
             {
                 final Operator op = Operator.parseOperator( tok.value );
                 if ( op == Operator.BITWISE_AND )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseEqualsNotEquals();
+                    if ( operand1 == null ) {
+                        error("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
+    }
+
+    private ASTNode parseEqualsNotEquals()
+    {
+        final ASTNode operand0 = parseGreaterThan();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.EQUALS || op == Operator.NOT_EQUALS )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseGreaterThan();
+                    if ( operand1 == null ) {
+                        error("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
+    }
+
+    private ASTNode parseGreaterThan()
+    {
+        final ASTNode operand0 = parseLessThan();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.GREATER_THAN )
+                {
+                    tok = lexer.next();
+                    ASTNode operand1 = parseLessThan();
+                    if ( operand1 == null ) {
+                        error("Expected an argument");
+                    }
+                    final OperatorNode opNode = new OperatorNode(op, tok.region() );
+                    opNode.add( operand0 );
+                    opNode.add( operand1 );
+                    return opNode;
+                }
+            }
+        }
+        return operand0;
+    }
+
+    private ASTNode parseLessThan()
+    {
+        final ASTNode operand0 = parseBitshift();
+        if ( operand0 != null )
+        {
+            Token tok = lexer.peek();
+            if ( tok.is(TokenType.OPERATOR) )
+            {
+                final Operator op = Operator.parseOperator( tok.value );
+                if ( op == Operator.LESS_THAN )
                 {
                     tok = lexer.next();
                     ASTNode operand1 = parseBitshift();
@@ -753,7 +883,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                     final Token registerToken = lexer.next();
                     final int regNum = Integer.parseInt( registerToken.value.substring( 1 ) );
                     result.add( new RegisterNode( regNum , registerToken.region() ) );
-                    if ( ! lexer.peek().is(TokenType.EQUALS) ) {
+                    if ( ! lexer.peek().is(TokenType.ASSIGNMENT ) ) {
                         error("Expected an '=' character but got "+lexer.peek());
                     }
                     lexer.next(); // consume '='
@@ -790,7 +920,7 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                         error("Expected an identifier but got "+lexer.peek());
                     }
                     result.add( identifier );
-                    if ( ! lexer.peek().is(TokenType.EQUALS) ) {
+                    if ( ! lexer.peek().is(TokenType.ASSIGNMENT ) ) {
                         error("Expected an '=' character but got "+lexer.peek());
                     }
                     lexer.next(); // consume '='

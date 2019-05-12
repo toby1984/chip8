@@ -23,6 +23,7 @@ import de.codesourcery.chip8.asm.ExpressionEvaluator;
 import de.codesourcery.chip8.asm.ISymbolResolver;
 import de.codesourcery.chip8.asm.Identifier;
 import de.codesourcery.chip8.asm.SymbolTable;
+import de.codesourcery.chip8.asm.ast.AST;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.CommentNode;
 import de.codesourcery.chip8.asm.ast.DirectiveNode;
@@ -176,7 +177,10 @@ public class MainFrame extends JFrame
         this.driver = driver;
         this.configProvider = configProvider;
         this.config = configProvider.load();
-        Stream.of( ConfigKey.values() ).filter( x -> x.isInternalFrame ).forEach( this::toggleVisibility );
+        Stream.of( ConfigKey.values() )
+                .filter( x -> x.isInternalFrame )
+                .filter( configKey -> Configuration.of(config,configKey).isEnabled( true ) )
+                .forEach( this::toggleVisibility );
         setJMenuBar( createMenuBar() );
         setContentPane( desktop );
         setSize( new Dimension(640,400) );
@@ -195,7 +199,7 @@ public class MainFrame extends JFrame
 
         public MyFrame(String title, ConfigKey configKey, boolean needsTick, boolean needsState)
         {
-            super(title,true,true,true);
+            super(title,true,false,true);
             this.needsTick = needsTick;
             this.needsState = needsState;
             this.setDefaultCloseOperation( JInternalFrame.DISPOSE_ON_CLOSE );
@@ -293,7 +297,7 @@ public class MainFrame extends JFrame
                     }
                 }
 
-                @Override public int getColumnCount() { return 2; }
+                @Override public int getColumnCount() { return 3; }
 
                 public void dataChanged() { fireTableDataChanged(); }
 
@@ -305,6 +309,8 @@ public class MainFrame extends JFrame
                             return "Address";
                         case 1:
                             return "Enabled";
+                        case 2:
+                            return "Condition";
                         default:
                             throw new IllegalArgumentException( "Out of range: "+columnIndex );
                     }
@@ -318,6 +324,8 @@ public class MainFrame extends JFrame
                             return String.class;
                         case 1:
                             return Boolean.class;
+                        case 2:
+                            return String.class;
                         default:
                             throw new IllegalArgumentException( "Out of range: "+columnIndex );
                     }
@@ -337,6 +345,8 @@ public class MainFrame extends JFrame
                             case 1:
                                 final Boolean isEnabled = driver.runOnThreadWithResult( d -> d.isEnabled( value ) );
                                 return isEnabled == null ? false : isEnabled;
+                            case 2:
+                                return value.matcher.getExpression();
                             default:
                                 throw new IllegalArgumentException( "Out of range: "+columnIndex );
                         }
@@ -344,14 +354,42 @@ public class MainFrame extends JFrame
                 }
 
                 @Override public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
+                    final Breakpoint bp;
+                    synchronized (LOCK)
+                    {
+                        bp = breakpoints.get( rowIndex );
+                    }
                     if (columnIndex==1)
                     {
-                        final Breakpoint bp;
-                        synchronized (LOCK)
+                        driver.changeState( bp, (Boolean) aValue );
+                    }
+                    else if ( columnIndex == 2 )
+                    {
+                        final ASTNode ast = compileExpression( (String) aValue );
+                        if ( ast != null )
                         {
-                            bp = breakpoints.get( rowIndex );
+                            final boolean isEnabled = driver.isEnabled( bp );
+                            final ISymbolResolver resolver = createSymbolResolver( driver );
+                            final Breakpoint.IMatcher newMatcher = new Breakpoint.IMatcher()
+                            {
+                                @Override
+                                public boolean matches(EmulatorDriver driver)
+                                {
+                                    final Object result =
+                                            ExpressionEvaluator.evaluate( ast, resolver, false );
+                                    return result instanceof Boolean && (Boolean) result;
+                                }
+
+                                @Override
+                                public String getExpression()
+                                {
+                                    return (String) aValue;
+                                }
+                            };
+                            final Breakpoint newBP = new Breakpoint(bp.address,bp.isTemporary,newMatcher);
+                            driver.removeBreakpoint( bp );
+                            driver.addBreakpoint( newBP, isEnabled );
                         }
-                        driver.runOnThread( d -> d.changeState( bp , (Boolean) aValue ) );
                     }
                 }
             };
@@ -460,7 +498,7 @@ public class MainFrame extends JFrame
                         }
                         if (func != null)
                         {
-                            Integer current = driver.runOnThreadWithResult(ip -> evaluate(expression));
+                            Integer current = evaluate(expression, createSymbolResolver( driver ) );
                             if (current != null)
                             {
                                 current = func.apply(current) % driver.emulator.memory.getSizeInBytes();
@@ -481,7 +519,7 @@ public class MainFrame extends JFrame
             @Override
             public void invoke(EmulatorDriver controller)
             {
-                final Integer adr = evaluate(expression);
+                final Integer adr = evaluate(expression,createSymbolResolver( controller ));
                 if ( adr != null )
                 {
                     final String text = controller.emulator.memory.dump(
@@ -543,7 +581,7 @@ public class MainFrame extends JFrame
             @Override
             public void invoke(EmulatorDriver controller)
             {
-                Integer adr = evaluate(expression);
+                Integer adr = evaluate(expression,createSymbolResolver( controller ));
                 if ( adr != null )
                 {
                     synchronized (data)
@@ -591,7 +629,7 @@ public class MainFrame extends JFrame
                         }
                         if (func != null)
                         {
-                            Integer current = driver.runOnThreadWithResult(ip -> evaluate(expression));
+                            Integer current = evaluate(expression,createSymbolResolver( driver ));
                             if (current != null)
                             {
                                 current = func.apply(current) % driver.emulator.memory.getSizeInBytes();
@@ -727,7 +765,7 @@ public class MainFrame extends JFrame
 
     private MyFrame createCPUView()
     {
-        return new MyFrame("CPU", ConfigKey.CPU, true,false) {
+        return new MyFrame("CPU", ConfigKey.CPU, true,true) {
 
             private final StringBuilder buffer = new StringBuilder();
             private final JTextArea area = new JTextArea();
@@ -736,6 +774,12 @@ public class MainFrame extends JFrame
                 area.setEditable( false );
                 getContentPane().add( area );
                 configure(area);
+            }
+
+            @Override
+            public void stateChanged(EmulatorDriver controller, EmulatorDriver.Reason reason)
+            {
+                invoke(controller);
             }
 
             @Override
@@ -1526,16 +1570,73 @@ public class MainFrame extends JFrame
         System.exit(0);
     }
 
-    private Integer evaluate(String expression)
+    public static ISymbolResolver createSymbolResolver(EmulatorDriver driver)
+    {
+        return new ISymbolResolver()
+        {
+            @Override public SymbolTable.Symbol get(Identifier scope, Identifier name) { return get(name); }
+
+            @Override
+            public SymbolTable.Symbol get(Identifier name)
+            {
+                Integer result = null;
+                final String v = name.value.toLowerCase();
+                if ( "pc".equals( v ) ) {
+                    result = driver.runOnThreadWithResult( x -> x.emulator.pc );
+                }
+                else if ( v.startsWith("v" ) ) {
+                    try {
+                        int regNum = Integer.parseInt( v.substring( 1 ) );
+                        result = driver.runOnThreadWithResult( x -> x.emulator.register[regNum] );
+                    }
+                    catch(Exception e) {
+                        // failure will be reported because of NULL symbol return
+                    }
+                }
+                if ( result == null ) {
+                    return null;
+                }
+                return new SymbolTable.Symbol( SymbolTable.GLOBAL_SCOPE,name, SymbolTable.Symbol.Type.LABEL,result);
+            }
+        };
+    }
+
+    public static Integer evaluate(String expression,ISymbolResolver resolver)
+    {
+        final ASTNode ast = compileExpression( expression );
+        if ( ast == null ) {
+            return null;
+        }
+
+        Object obj = null;
+        try
+        {
+            obj = ExpressionEvaluator.evaluate( ast, resolver, true );
+        }
+        catch (Exception e)
+        {
+            System.err.println( "Failed to evalue expression >" + expression + "<" );
+        }
+        return obj instanceof Number ? ((Number) obj).intValue() : null;
+    }
+
+    public static ASTNode compileExpression(String expression)
     {
         final Assembler.CompilationContext ctx = new Assembler.CompilationContext( new ExecutableWriter() );
         final Parser p = new Parser( new Lexer( new Scanner(expression) ) , ctx );
         ASTNode ast = p.parseExpression();
 
+        if ( ctx.hasErrors() )
+        {
+            System.err.println("Failed to evaluate expression >"+expression+"<");
+            ctx.messages.stream().forEach( System.err::println );
+            return null;
+        }
+
         // Lexer will lex all reserved words (which also include register names)
         // as TokenType#TEXT instead of TokenType#IDENTIFIER
         // Rewrite those AST nodes to be identifiers so that ExpressionEvaluator#evaluate()
-        // will invoke our ISymbolResolver to resolve them
+        // will invoke our custom ISymbolResolver to resolve them
 
         final Function<ASTNode,ASTNode> mapper = node ->
         {
@@ -1566,50 +1667,6 @@ public class MainFrame extends JFrame
 
         System.out.println("Parsed >"+expression+"<");
         System.out.println( ast.toPrettyString() );
-
-        if ( ctx.hasErrors() )
-        {
-            System.err.println("Failed to evaluate expression >"+expression+"<");
-            ctx.messages.stream().forEach( System.err::println );
-            return null;
-        }
-
-        final ISymbolResolver resolver = new ISymbolResolver()
-        {
-            @Override public SymbolTable.Symbol get(Identifier scope, Identifier name) { return get(name); }
-
-            @Override
-            public SymbolTable.Symbol get(Identifier name)
-            {
-                Integer result = null;
-                final String v = name.value.toLowerCase();
-                if ( "pc".equals( v ) ) {
-                    result = driver.runOnThreadWithResult( x -> x.emulator.pc );
-                }
-                else if ( v.startsWith("v" ) ) {
-                    try {
-                        int regNum = Integer.parseInt( v.substring( 1 ) );
-                        result = driver.runOnThreadWithResult( x -> x.emulator.register[regNum] );
-                    }
-                    catch(Exception e) {
-                        // failure will be reported because of NULL symbol return
-                    }
-                }
-                if ( result == null ) {
-                    return null;
-                }
-                return new SymbolTable.Symbol( SymbolTable.GLOBAL_SCOPE,name, SymbolTable.Symbol.Type.LABEL,result);
-            }
-        };
-        Object obj = null;
-        try
-        {
-            obj = ExpressionEvaluator.evaluate( ast, resolver, true );
-        }
-        catch (Exception e)
-        {
-            System.err.println( "Failed to evalue expression >" + expression + "<" );
-        }
-        return obj instanceof Number ? ((Number) obj).intValue() : null;
+        return ast;
     }
 }

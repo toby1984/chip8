@@ -22,6 +22,7 @@ import de.codesourcery.chip8.asm.parser.TokenType;
 import junit.framework.TestCase;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,7 +34,7 @@ public class LexerTest extends TestCase
     {
         List<Token> tokens = lex("     \n\n\n    ");
         assertEquals( "Got "+tokens,
-        4,tokens.size());
+                4,tokens.size());
         assertEquals(TokenType.NEWLINE, tokens.get(0).type );
         assertEquals(TokenType.NEWLINE, tokens.get(1).type );
         assertEquals(TokenType.NEWLINE, tokens.get(2).type );
@@ -57,7 +58,7 @@ public class LexerTest extends TestCase
         List<Token> tokens = lex("label: jp 0x123 ; comment");
 
         assertEquals( "Got "+tokens.stream().map(x->x.toString())
-                             .collect( Collectors.joining("\n" ) ),7,tokens.size());
+                .collect( Collectors.joining("\n" ) ),7,tokens.size());
 
         assertEquals(TokenType.IDENTIFIER, tokens.get(0).type );
         assertEquals(TokenType.COLON, tokens.get(1).type );
@@ -66,6 +67,50 @@ public class LexerTest extends TestCase
         assertEquals(TokenType.SEMICOLON, tokens.get(4).type );
         assertEquals(TokenType.IDENTIFIER, tokens.get(5).type );
         assertEquals(TokenType.EOF, tokens.get(6).type );
+    }
+
+    public void testLogicalOperators2() {
+        List<Token> tokens = lex("1==2||3<4");
+
+        assertEquals( "Got \n"+tokens.stream().map(x->x.toString())
+                .collect( Collectors.joining("\n" ) ),8,tokens.size());
+
+        final Iterator<Token> it = tokens.iterator();
+        assertEquals(TokenType.DECIMAL_NUMBER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.DECIMAL_NUMBER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.DECIMAL_NUMBER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.DECIMAL_NUMBER, it.next().type );
+        assertEquals(TokenType.EOF, it.next().type );
+    }
+
+    public void testLogicalOperators()
+    {
+        List<Token> tokens = lex("a > 3 && b < 4 || c == 5 || d != 6");
+
+        assertEquals( "Got \n"+tokens.stream().map(x->x.toString())
+                .collect( Collectors.joining("\n" ) ),16,tokens.size());
+
+        final Iterator<Token> it = tokens.iterator();
+
+        assertEquals(TokenType.IDENTIFIER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.DECIMAL_NUMBER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.TEXT, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.DECIMAL_NUMBER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.IDENTIFIER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.DECIMAL_NUMBER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.IDENTIFIER, it.next().type );
+        assertEquals(TokenType.OPERATOR, it.next().type );
+        assertEquals(TokenType.DECIMAL_NUMBER, it.next().type );
+        assertEquals(TokenType.EOF, it.next().type );
     }
 
     public void testLexMacro() {
