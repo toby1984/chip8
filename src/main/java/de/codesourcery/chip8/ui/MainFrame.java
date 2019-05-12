@@ -331,7 +331,10 @@ public class MainFrame extends JFrame
                     }
                 }
 
-                @Override public boolean isCellEditable(int rowIndex, int columnIndex) { return columnIndex==1; }
+                @Override
+                public boolean isCellEditable(int rowIndex, int columnIndex) {
+                    return columnIndex==1||columnIndex==2;
+                }
 
                 @Override
                 public Object getValueAt(int rowIndex, int columnIndex)
@@ -841,6 +844,7 @@ public class MainFrame extends JFrame
                 synchronized (lines) {
                     userProvidedAddress = false;
                 }
+                refresh();
             }
 
             @Override
