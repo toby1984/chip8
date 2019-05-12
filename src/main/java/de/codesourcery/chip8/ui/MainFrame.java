@@ -65,8 +65,6 @@ import javax.swing.event.HyperlinkListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.text.Style;
-import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -126,7 +124,8 @@ public class MainFrame extends JFrame
         BUTTONS("buttons","Buttons"),
         SCREEN("screen","Screen"),
         SPRITE_VIEW("sprite_view","Sprites"),
-        MEMORY("memory","Memory");
+        MEMORY("memory","Memory"),
+        BREAKPOINTS( "breakpoints", "Breakpoints");
 
         private final String id;
         public final boolean isInternalFrame;
@@ -159,11 +158,12 @@ public class MainFrame extends JFrame
         void save();
     }
 
-    private final List<MyFrame> windows;
+    private final Map<ConfigKey,MyFrame> windows = new HashMap<>();
     private final EmulatorDriver driver;
 
     private final IConfigurationProvider configProvider;
     private final Properties config;
+    private final JDesktopPane desktop = new JDesktopPane();
 
     public MainFrame(EmulatorDriver driver, IConfigurationProvider configProvider)
     {
@@ -172,14 +172,7 @@ public class MainFrame extends JFrame
         this.driver = driver;
         this.configProvider = configProvider;
         this.config = configProvider.load();
-        windows = createFrames();
-        final JDesktopPane desktop = new JDesktopPane();
-        windows.forEach( win ->
-        {
-            Configuration.applyWindowState(config, win.configKey,win);
-            win.invoke( driver );
-            desktop.add( win );
-        });
+        Stream.of( ConfigKey.values() ).filter( x -> x.isInternalFrame ).forEach( this::toggleVisibility );
         setJMenuBar( createMenuBar() );
         setContentPane( desktop );
         setSize( new Dimension(640,400) );
@@ -193,19 +186,28 @@ public class MainFrame extends JFrame
     protected abstract class MyFrame extends JInternalFrame implements EmulatorDriver.IDriverCallback, EmulatorDriver.IStateListener
     {
         public final ConfigKey configKey;
+        private final boolean needsTick;
+        private final boolean needsState;
 
         public MyFrame(String title, ConfigKey configKey, boolean needsTick, boolean needsState)
         {
             super(title,true,true,true);
+            this.needsTick = needsTick;
+            this.needsState = needsState;
+            this.setDefaultCloseOperation( JInternalFrame.DISPOSE_ON_CLOSE );
+            this.configKey = configKey;
+            initialize( driver );
+            configure(this);
+        }
+
+        protected void initialize(EmulatorDriver driver)
+        {
             if ( needsTick ) {
                 driver.registerTickListener( this );
             }
             if ( needsState ) {
                 driver.registerStateListener( this );
             }
-            this.setDefaultCloseOperation( JInternalFrame.DISPOSE_ON_CLOSE );
-            this.configKey = configKey;
-            configure(this);
         }
 
         protected final void configure(Component component) {
@@ -213,11 +215,20 @@ public class MainFrame extends JFrame
         }
 
         @Override
-        public void dispose()
+        public final void dispose()
         {
             driver.removeTickListener( this );
             driver.removeStateListener( this );
-            super.dispose();
+            try {
+                onDispose();
+            }
+            finally
+            {
+                super.dispose();
+            }
+        }
+
+        protected void onDispose() {
         }
 
         protected final String hexByte(int value) {
@@ -235,17 +246,167 @@ public class MainFrame extends JFrame
         public void stateChanged(EmulatorDriver controller, EmulatorDriver.Reason reason) { }
     }
 
-    private List<MyFrame> createFrames()
+    private MyFrame createInternalFrame(ConfigKey key)
     {
-        final List<MyFrame> result = new ArrayList<>();
-        result.add( createScreenView() );
-        result.add( createButtonsView() );
-        result.add( createDisasmView() );
-        result.add( createCPUView() );
-        result.add( createAsmView() );
-        result.add( createSpriteView() );
-        result.add( createMemoryView() );
-        return result;
+        switch( key ) {
+            case ASM:
+                return createAsmView();
+            case DISASM:
+                return createDisasmView();
+            case CPU:
+                return createCPUView();
+            case BUTTONS:
+                return createButtonsView();
+            case SCREEN:
+                return createScreenView();
+            case SPRITE_VIEW:
+                return createSpriteView();
+            case MEMORY:
+                return createMemoryView();
+            case BREAKPOINTS:
+                return createBreakpointsView();
+            default:
+                throw new IllegalArgumentException("Unhandled key "+key);
+        }
+    }
+
+    private MyFrame createBreakpointsView()
+    {
+        return new MyFrame( "Breakpoints", ConfigKey.BREAKPOINTS, false, false )
+        {
+            private final Object LOCK = new Object();
+
+            // @GuardedBy( LOCK )
+            private List<Breakpoint> breakpoints = new ArrayList<>();
+
+            final class MyTableModel extends DefaultTableModel {
+
+                @Override
+                public int getRowCount()
+                {
+                    synchronized( LOCK ) {
+                        return breakpoints.size();
+                    }
+                }
+
+                @Override public int getColumnCount() { return 2; }
+
+                public void dataChanged() { fireTableDataChanged(); }
+
+                @Override
+                public String getColumnName(int columnIndex)
+                {
+                    switch(columnIndex) {
+                        case 0:
+                            return "Address";
+                        case 1:
+                            return "Enabled";
+                        default:
+                            throw new IllegalArgumentException( "Out of range: "+columnIndex );
+                    }
+                }
+
+                @Override
+                public Class<?> getColumnClass(int columnIndex)
+                {
+                    switch(columnIndex) {
+                        case 0:
+                            return String.class;
+                        case 1:
+                            return Boolean.class;
+                        default:
+                            throw new IllegalArgumentException( "Out of range: "+columnIndex );
+                    }
+                }
+
+                @Override public boolean isCellEditable(int rowIndex, int columnIndex) { return columnIndex==1; }
+
+                @Override
+                public Object getValueAt(int rowIndex, int columnIndex)
+                {
+                    synchronized (LOCK)
+                    {
+                        final Breakpoint value = breakpoints.get( rowIndex );
+                        switch(columnIndex) {
+                            case 0:
+                                return "0x" + StringUtils.leftPad( Integer.toHexString( value.address ), 3, '0' );
+                            case 1:
+                                final Boolean isEnabled = driver.runOnThreadWithResult( d -> d.isEnabled( value ) );
+                                return isEnabled == null ? false : isEnabled;
+                            default:
+                                throw new IllegalArgumentException( "Out of range: "+columnIndex );
+                        }
+                    }
+                }
+
+                @Override public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
+                    if (columnIndex==1)
+                    {
+                        final Breakpoint bp;
+                        synchronized (LOCK)
+                        {
+                            bp = breakpoints.get( rowIndex );
+                        }
+                        driver.runOnThread( d -> d.changeState( bp , (Boolean) aValue ) );
+                    }
+                }
+            };
+
+            private MyTableModel tableModel = new MyTableModel();
+
+            private JTable table = new JTable(tableModel);
+
+            {
+                getContentPane().setLayout( new BorderLayout() );
+                getContentPane().add( new JScrollPane( table ), BorderLayout.CENTER );
+                table.addKeyListener( new KeyAdapter()
+                {
+                    @Override
+                    public void keyReleased(KeyEvent e)
+                    {
+                        if ( e.getKeyCode() == KeyEvent.VK_DELETE )
+                        {
+                            final int idx = table.getSelectedRow();
+                            if ( idx >= 0 )
+                            {
+                                final Breakpoint bp;
+                                synchronized (LOCK)
+                                {
+                                    bp = breakpoints.get( idx );
+                                }
+                                driver.runOnThread( d -> d.removeBreakpoint( bp ) );
+                            }
+                        }
+                    }
+                } );
+            }
+
+            volatile EmulatorDriver.IDriverCallback bpListener;
+
+            @Override
+            protected void initialize(EmulatorDriver driver)
+            {
+                super.initialize( driver );
+                bpListener = emulatorDriver ->
+                {
+                    synchronized (LOCK)
+                    {
+                        final List<Breakpoint> tmp = emulatorDriver.getAllBreakpoints();
+                        tmp.removeIf( t -> t.isTemporary );
+                        tmp.sort( Comparator.comparingInt( x -> x.address ) );
+                        breakpoints = tmp;
+                    }
+                    SwingUtilities.invokeLater( tableModel::dataChanged );
+                };
+                driver.addBreakpointChangeListener( bpListener );
+            }
+
+            @Override
+            protected void onDispose()
+            {
+                driver.removeBreakpointChangeListener( bpListener );
+            }
+        };
     }
 
     private MyFrame createMemoryView()
@@ -612,6 +773,8 @@ public class MainFrame extends JFrame
 
             private static final int WORDS_TO_DISASSEMBLE = 16;
 
+            private volatile EmulatorDriver.IDriverCallback bpListener;
+
             // @GuardedBy( lines )
             private boolean userProvidedAddress;
 
@@ -632,17 +795,28 @@ public class MainFrame extends JFrame
                 }
             }
 
+            @Override
+            protected void initialize(EmulatorDriver driver)
+            {
+                super.initialize( driver );
+                bpListener = d -> refresh();
+                driver.addBreakpointChangeListener( bpListener);
+            }
+
+            @Override
+            protected void onDispose()
+            {
+                driver.removeBreakpointChangeListener( bpListener );
+            }
+
             private void toggleBreakpoint(int address)
             {
-                System.out.println( threadName()+" - Toggling breakpoint @ 0x"+Integer.toHexString(address));
                 driver.toggle(new Breakpoint(address,false) );
-                refresh();
             }
 
             private void refresh()
             {
-                driver.runOnThread(this );
-                panel.repaint();
+                driver.runOnThread( this );
             }
 
             private final JPanel panel = new JPanel() {
@@ -718,18 +892,15 @@ public class MainFrame extends JFrame
                     {
                         synchronized(bps)
                         {
-                            System.out.println( threadName()+" - getting breakpoints");
                             ip.getAllBreakpoints().stream()
                                     .filter(x -> !x.isTemporary)
                                     .forEach(x -> bps.put(x.address, x));
-                            System.out.println(threadName()+" - read breakpoints:\n"+bps.values());
                         }
                     });
                     synchronized (lines)
                     {
                         synchronized (bps)
                         {
-                            System.out.println( threadName()+" - got "+bps.size()+" breakpoints");
                             int address = startAddress;
                             for (String line : lines)
                             {
@@ -758,7 +929,6 @@ public class MainFrame extends JFrame
             @Override
             public void invoke(EmulatorDriver controller)
             {
-                System.out.println( threadName()+" - invoke() called - disassembling");
                 synchronized(this.lines)
                 {
                     final Emulator interpreter = controller.emulator;
@@ -1278,9 +1448,7 @@ public class MainFrame extends JFrame
         Stream.of( ConfigKey.values() ).filter( c -> c.isInternalFrame )
                 .sorted( Comparator.comparing( a -> a.displayName ) )
                 .forEach( key -> cbMenuItem(view, key.displayName, () ->
-                                getWindow( key )
-                                        .map( Component::isVisible )
-                                        .orElse( false ),
+                                getWindow( key ).isPresent(),
                         () -> toggleVisibility( key ) )
                 );
         bar.add( view );
@@ -1289,18 +1457,30 @@ public class MainFrame extends JFrame
 
     private void toggleVisibility(ConfigKey configKey)
     {
-        windows.stream().filter( x -> x.configKey.equals( configKey ) )
-                .forEach( w ->
-                {
-                    w.setVisible( !w.isVisible() );
-                    Configuration.saveWindowState( config, configKey,w);
-                });
-
+        // hide window
+        final MyFrame frame = windows.get( configKey );
+        if ( frame != null )
+        {
+                frame.setVisible(false);
+                Configuration.saveWindowState( config, configKey,frame);
+                frame.dispose();
+                windows.remove( configKey );
+                desktop.remove( frame );
+                configProvider.save();
+                return;
+        }
+        // show window
+        final MyFrame newFrame = createInternalFrame( configKey );
+        windows.put( configKey, newFrame );
+        desktop.add( newFrame );
+        Configuration.of(config,configKey).setEnabled( true );
+        Configuration.applyWindowState( config, configKey, newFrame );
         configProvider.save();
+        driver.runOnThread( newFrame );
     }
 
     private Optional<MyFrame> getWindow(ConfigKey key) {
-        return windows.stream().filter( x -> x.configKey == key ).findFirst();
+        return Optional.ofNullable( windows.get( key ) );
     }
 
     private void menuItem(JMenu menu, String name,Runnable r)
@@ -1334,7 +1514,7 @@ public class MainFrame extends JFrame
             swingTimer.stop();
         }
         driver.destroy();
-        windows.forEach(win -> Configuration.saveWindowState(config, win.configKey,win) );
+        windows.values().forEach(win -> Configuration.saveWindowState(config, win.configKey,win) );
         Configuration.saveWindowState(config, ConfigKey.MAINFRAME, MainFrame.this);
         configProvider.save();
         dispose();

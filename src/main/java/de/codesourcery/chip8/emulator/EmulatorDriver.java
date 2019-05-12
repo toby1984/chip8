@@ -102,6 +102,7 @@ public class EmulatorDriver
     private final CopyOnWriteArrayList<Runnable> shutdownListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<IDriverCallback> tickListeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<IStateListener> stateListeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<IDriverCallback> breakpointChangeListeners = new CopyOnWriteArrayList<>();
 
     private final ControllerThread thread = new ControllerThread();
 
@@ -624,6 +625,7 @@ public class EmulatorDriver
         runOnThread( ip -> {
             enabledBreakpoints.remove( bp );
             disabledBreakpoints.remove( bp );
+            invokeBreakpointChangeListeners();
         }, CmdType.CHANGE_BREAKPOINTS);
     }
 
@@ -645,8 +647,8 @@ public class EmulatorDriver
             } else {
                 enabledBreakpoints.add(bp);
             }
+            invokeBreakpointChangeListeners();
         }, CmdType.CHANGE_BREAKPOINTS);
-        System.out.println( Thread.currentThread().getName()+" - toggle() returns");
     }
 
     /**
@@ -699,12 +701,37 @@ public class EmulatorDriver
                 enabledBreakpoints.remove( bp );
                 disabledBreakpoints.add( bp );
             }
+            invokeBreakpointChangeListeners();
         }, CmdType.CHANGE_BREAKPOINTS);
     }
 
     public void addShutdownListener(Runnable r)
     {
+        Validate.notNull( r, "r must not be null" );
         this.shutdownListeners.add( r );
+    }
+
+    /**
+     * Add breakpoint change listener.
+     *
+     * @param listener listener to be invoked whenever configured breakpoints are changed (added/removed etc.)
+     */
+    public void addBreakpointChangeListener(IDriverCallback listener)
+    {
+        Validate.notNull( listener, "listener must not be null" );
+        this.breakpointChangeListeners.add( listener );
+    }
+
+    /**
+     * Remove breakpoint change listener.
+     *
+     * @param listener
+     * @see #addBreakpointChangeListener(IDriverCallback)
+     */
+    public void removeBreakpointChangeListener(IDriverCallback listener)
+    {
+        Validate.notNull( listener, "listener must not be null" );
+        this.breakpointChangeListeners.remove( listener );
     }
 
     /**
@@ -735,5 +762,21 @@ public class EmulatorDriver
     public void keyReleased(int key)
     {
         runOnThread(driver -> driver.thread.keyReleased(key));
+    }
+
+    private void invokeBreakpointChangeListeners()
+    {
+        breakpointChangeListeners.forEach( l ->
+        {
+            try
+            {
+                l.invoke( EmulatorDriver.this );
+            }
+            catch(Exception e)
+            {
+                System.err.println("Breakpoint change listener "+l+" threw exception.");
+                e.printStackTrace();
+            }
+        } );
     }
 }

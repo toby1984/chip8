@@ -157,7 +157,8 @@ public final class Configuration
         final Configuration wrapper = new Configuration(props, configKey );
         comp.setSize( wrapper.getSize(new Dimension(200,100 ) ) );
         comp.setLocation( wrapper.getLocation(new Point(0,0 ) ) );
-        comp.setVisible( wrapper.isEnabled(true ) );
+        final boolean isEnabled = wrapper.isEnabled( true );
+        comp.setVisible( isEnabled );
     }
 
     private File getFile(String prop) {

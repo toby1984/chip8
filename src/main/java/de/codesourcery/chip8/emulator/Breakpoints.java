@@ -62,10 +62,8 @@ public final class Breakpoints
 
     public void remove(Breakpoint bp)
     {
-        System.out.println("Removing "+bp+" from "+this);
         final Int2ObjectOpenHashMap<Breakpoint> map = getMap( bp.address, bp.isTemporary );
         if ( map.remove( bp.address ) != null ) {
-            System.out.println("SUCCESS: Removed "+bp+" from "+this);
             size--;
         }
     }
@@ -99,9 +97,7 @@ public final class Breakpoints
     public void getAll(List<Breakpoint> destination)
     {
         destination.addAll( temporary.values() );
-        System.out.println("getAll[ "+this+", temporary]: "+destination);
         destination.addAll( permanent.values() );
-        System.out.println("getAll[ "+this+", temporary+permanent]: "+destination);
     }
 
     public boolean contains(Breakpoint bp)
