@@ -31,7 +31,7 @@ import java.util.function.Predicate;
  *
  * @author tobias.gierke@code-sourcery.de
  */
-public class SymbolTable
+public class SymbolTable implements ISymbolResolver
 {
     public static final Identifier GLOBAL_SCOPE = new Identifier("_GLOBAL_");
 
@@ -181,10 +181,25 @@ public class SymbolTable
     }
 
     /**
+     * Resolves a symbol from global scope.
+     *
+     * @param name
+     * @return
+     * @see #GLOBAL_SCOPE
+     */
+    @Override
+    public Symbol get(Identifier name)
+    {
+        return get(SymbolTable.GLOBAL_SCOPE,name);
+    }
+
+    /**
      * Get symbol by name.
      *
+     * @param scope symbol scope
      * @param identifier
      * @return symbol or <code>null</code> if not found
+     * @see #GLOBAL_SCOPE
      */
     public Symbol get(Identifier scope,Identifier identifier)
     {

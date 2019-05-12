@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 public class Identifier
 {
     // valid identifiers look like this
-    private static final Pattern ID = Pattern.compile("[_a-zA-Z]+[_0-9a-zA-Z]*");
+    public static final Pattern ID = Pattern.compile("[_a-zA-Z]+[_0-9a-zA-Z]*");
 
     // reserved identifiers
     private static final Set<String> RESERVED = new HashSet<>();
@@ -60,12 +60,30 @@ public class Identifier
 
     public final String value;
 
-    public Identifier(String value)
+
+
+    public Identifier(String value) {
+        this(value,true);
+    }
+
+    private Identifier(String value,boolean safe)
     {
-        if ( ! isValid(value) ) {
+        if ( safe && ! isValid(value) ) {
             throw new IllegalArgumentException("Not a valid identifier: "+value);
         }
         this.value = value;
+    }
+
+    /**
+     * Internal use only.
+     *
+     * @param s
+     * @return
+     * @deprecated Internal use only.
+     */
+    @Deprecated
+    public static Identifier unsafe(String s) {
+        return new Identifier(s,false);
     }
 
     public static Identifier of(String s) {

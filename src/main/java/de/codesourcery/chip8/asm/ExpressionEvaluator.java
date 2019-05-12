@@ -18,7 +18,7 @@ import java.util.List;
  */
 public class ExpressionEvaluator
 {
-    public static boolean isValueNode(ASTNode node, Assembler.CompilationContext context)
+    public static boolean isValueNode(ASTNode node, ISymbolResolver context)
     {
         return node instanceof NumberNode ||
                 node instanceof IdentifierNode ||
@@ -26,7 +26,7 @@ public class ExpressionEvaluator
                 node instanceof OperatorNode;
     }
 
-    public static Integer evaluateAddress(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    public static Integer evaluateAddress(ASTNode node,ISymbolResolver context, boolean failOnErrors)
     {
         final Integer value = evaluateNumber( node, context, failOnErrors );
         if ( value != null && (value < 0 || value > 0xfff) )
@@ -36,7 +36,7 @@ public class ExpressionEvaluator
         return value;
     }
 
-    public static Integer evaluateWord(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    public static Integer evaluateWord(ASTNode node,ISymbolResolver context, boolean failOnErrors)
     {
         final Integer value = evaluateNumber( node, context, failOnErrors );
         if ( value != null && (value < 0 || value > 65535) )
@@ -46,7 +46,7 @@ public class ExpressionEvaluator
         return value;
     }
 
-    public static Integer evaluateByte(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    public static Integer evaluateByte(ASTNode node,ISymbolResolver context, boolean failOnErrors)
     {
         final Integer value = evaluateNumber( node, context, failOnErrors );
         if ( value != null && (value < 0 || value > 255) )
@@ -56,7 +56,7 @@ public class ExpressionEvaluator
         return value;
     }
 
-    public static Integer evaluateNumber(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    public static Integer evaluateNumber(ASTNode node,ISymbolResolver context, boolean failOnErrors)
     {
         Object value = evaluate(node,context,failOnErrors);
         if ( value != null ) {
@@ -68,7 +68,7 @@ public class ExpressionEvaluator
         return null;
     }
 
-    public static Object evaluate(ASTNode node,Assembler.CompilationContext context, boolean failOnErrors)
+    public static Object evaluate(ASTNode node,ISymbolResolver context, boolean failOnErrors)
     {
         if ( ! isValueNode( node, context) ) {
             throw new IllegalArgumentException( "Not a value node: "+node );
@@ -76,7 +76,7 @@ public class ExpressionEvaluator
         return doEvaluate( node,context,failOnErrors );
     }
 
-    private static Object doEvaluate(ASTNode node,Assembler.CompilationContext context,boolean failOnErrors)
+    private static Object doEvaluate(ASTNode node,ISymbolResolver context,boolean failOnErrors)
     {
         if ( node instanceof NumberNode) {
             return ((NumberNode) node).value;
@@ -100,12 +100,7 @@ public class ExpressionEvaluator
         if ( node instanceof IdentifierNode )
         {
             final Identifier id = ((IdentifierNode) node).identifier;
-            // try local scope first
-            SymbolTable.Symbol symbol = context.symbolTable.get( context.getLastGlobalLabel(), id );
-            if ( symbol == null ) {
-                // fall-back to global scope
-                symbol = context.symbolTable.get( SymbolTable.GLOBAL_SCOPE, id );
-            }
+            final SymbolTable.Symbol symbol = context.get( id );
             if ( symbol != null )
             {
                 if ( symbol.value != null ) {

@@ -19,6 +19,10 @@ import de.codesourcery.chip8.Disassembler;
 import de.codesourcery.chip8.asm.Assembler;
 import de.codesourcery.chip8.asm.CompilationMessages;
 import de.codesourcery.chip8.asm.ExecutableWriter;
+import de.codesourcery.chip8.asm.ExpressionEvaluator;
+import de.codesourcery.chip8.asm.ISymbolResolver;
+import de.codesourcery.chip8.asm.Identifier;
+import de.codesourcery.chip8.asm.SymbolTable;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.CommentNode;
 import de.codesourcery.chip8.asm.ast.DirectiveNode;
@@ -888,12 +892,13 @@ public class MainFrame extends JFrame
                     int y0 = fontHeight;
 
                     final Map<Integer, Breakpoint> bps = new HashMap<>();
-                    driver.runOnThread(ip ->
+                    driver.runOnThread(emuDriver ->
                     {
                         synchronized(bps)
                         {
-                            ip.getAllBreakpoints().stream()
+                            emuDriver.getAllBreakpoints().stream()
                                     .filter(x -> !x.isTemporary)
+                                    .filter( emuDriver::isEnabled )
                                     .forEach(x -> bps.put(x.address, x));
                         }
                     });
@@ -1521,47 +1526,90 @@ public class MainFrame extends JFrame
         System.exit(0);
     }
 
-    private static String threadName() {
-        return Thread.currentThread().getName();
-    }
-
     private Integer evaluate(String expression)
     {
-        // TODO: Implement expression parsing in parser and use this to evaluate an expression
+        final Assembler.CompilationContext ctx = new Assembler.CompilationContext( new ExecutableWriter() );
+        final Parser p = new Parser( new Lexer( new Scanner(expression) ) , ctx );
+        ASTNode ast = p.parseExpression();
+
+        // Lexer will lex all reserved words (which also include register names)
+        // as TokenType#TEXT instead of TokenType#IDENTIFIER
+        // Rewrite those AST nodes to be identifiers so that ExpressionEvaluator#evaluate()
+        // will invoke our ISymbolResolver to resolve them
+
+        final Function<ASTNode,ASTNode> mapper = node ->
+        {
+            if ( node instanceof TextNode )
+            {
+                final TextNode tn = (TextNode) node;
+                if ( Identifier.ID.matcher( tn.value ).matches() )
+                {
+                    return new IdentifierNode( Identifier.unsafe(tn.value), tn.getRegion() );
+                }
+            }
+            return node;
+        };
+        if ( ast instanceof TextNode) {
+            ast = mapper.apply( ast );
+        }
+        else
+        {
+            ast.visitInOrder( (node, depth) ->
+            {
+                ASTNode mapped = mapper.apply( node );
+                if ( mapped != node )
+                {
+                    node.replaceWith( mapped );
+                }
+            } );
+        }
+
+        System.out.println("Parsed >"+expression+"<");
+        System.out.println( ast.toPrettyString() );
+
+        if ( ctx.hasErrors() )
+        {
+            System.err.println("Failed to evaluate expression >"+expression+"<");
+            ctx.messages.stream().forEach( System.err::println );
+            return null;
+        }
+
+        final ISymbolResolver resolver = new ISymbolResolver()
+        {
+            @Override public SymbolTable.Symbol get(Identifier scope, Identifier name) { return get(name); }
+
+            @Override
+            public SymbolTable.Symbol get(Identifier name)
+            {
+                Integer result = null;
+                final String v = name.value.toLowerCase();
+                if ( "pc".equals( v ) ) {
+                    result = driver.runOnThreadWithResult( x -> x.emulator.pc );
+                }
+                else if ( v.startsWith("v" ) ) {
+                    try {
+                        int regNum = Integer.parseInt( v.substring( 1 ) );
+                        result = driver.runOnThreadWithResult( x -> x.emulator.register[regNum] );
+                    }
+                    catch(Exception e) {
+                        // failure will be reported because of NULL symbol return
+                    }
+                }
+                if ( result == null ) {
+                    return null;
+                }
+                return new SymbolTable.Symbol( SymbolTable.GLOBAL_SCOPE,name, SymbolTable.Symbol.Type.LABEL,result);
+            }
+        };
+        Object obj = null;
         try
         {
-            if (StringUtils.isNotBlank(expression))
-            {
-                if ( "pc".equalsIgnoreCase( expression ) )
-                {
-                    return driver.runOnThreadWithResult(ip -> ip.emulator.pc);
-                }
-                if (expression.startsWith("0x") || expression.startsWith("0X"))
-                {
-                    return Integer.parseInt(expression.trim().substring(2), 16);
-                }
-                if (expression.startsWith("%"))
-                {
-                    return Integer.parseInt(expression.trim().substring(1), 2);
-                }
-                if ( expression.length() >= 2 )
-                {
-                    final int regNum;
-                    try {
-                        regNum = RegisterNode.parseRegisterNum(expression );
-                        return driver.runOnThreadWithResult(ip -> ip.emulator.register[regNum] );
-                    }
-                    catch(IllegalArgumentException e) {
-                        // ok, not a Vx register
-                    }
-                }
-                return Integer.parseInt(expression.trim());
-            }
+            obj = ExpressionEvaluator.evaluate( ast, resolver, true );
         }
-        catch(Exception e)
+        catch (Exception e)
         {
-            e.printStackTrace();
+            System.err.println( "Failed to evalue expression >" + expression + "<" );
         }
-        return null;
+        return obj instanceof Number ? ((Number) obj).intValue() : null;
     }
 }

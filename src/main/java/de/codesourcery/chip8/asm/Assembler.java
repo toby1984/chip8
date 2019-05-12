@@ -157,7 +157,7 @@ public class Assembler
         }
     }
 
-    public static final class CompilationContext
+    public static final class CompilationContext implements ISymbolResolver
     {
         public final SymbolTable symbolTable = new SymbolTable();
         public final ExecutableWriter outputWriter;
@@ -169,6 +169,24 @@ public class Assembler
         public CompilationContext(ExecutableWriter writer)
         {
             this.outputWriter= writer;
+        }
+
+        @Override
+        public SymbolTable.Symbol get(Identifier name)
+        {
+            // try local scope first
+            SymbolTable.Symbol symbol = symbolTable.get( getLastGlobalLabel(), name );
+            if ( symbol == null ) {
+                // fall-back to global scope
+                symbol = symbolTable.get( name );
+            }
+            return symbol;
+        }
+
+        @Override
+        public SymbolTable.Symbol get(Identifier scope, Identifier name)
+        {
+            return symbolTable.get(scope,name);
         }
 
         public Identifier getLastGlobalLabel()
