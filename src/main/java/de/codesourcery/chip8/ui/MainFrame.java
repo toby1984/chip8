@@ -42,6 +42,7 @@ import de.codesourcery.chip8.emulator.EmulatorDriver;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 
+import javax.imageio.spi.RegisterableService;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JDesktopPane;
@@ -372,14 +373,15 @@ public class MainFrame extends JFrame
                         if ( ast != null )
                         {
                             final boolean isEnabled = driver.isEnabled( bp );
-                            final ISymbolResolver resolver = createSymbolResolver( driver );
+                            final ExpressionEvaluator.INodeEvaluator resolver =
+                                    createSymbolResolver( driver );
+
                             final Breakpoint.IMatcher newMatcher = new Breakpoint.IMatcher()
                             {
                                 @Override
                                 public boolean matches(EmulatorDriver driver)
                                 {
-                                    final Object result =
-                                            ExpressionEvaluator.evaluate( ast, resolver, false );
+                                    final Object result = ExpressionEvaluator.evaluate( ast, resolver, false );
                                     return result instanceof Boolean && (Boolean) result;
                                 }
 
@@ -1574,9 +1576,9 @@ public class MainFrame extends JFrame
         System.exit(0);
     }
 
-    public static ISymbolResolver createSymbolResolver(EmulatorDriver driver)
+    public static ExpressionEvaluator.INodeEvaluator createSymbolResolver(EmulatorDriver driver)
     {
-        return new ISymbolResolver()
+        final ISymbolResolver symbolResolver = new ISymbolResolver()
         {
             @Override public SymbolTable.Symbol get(Identifier scope, Identifier name) { return get(name); }
 
@@ -1603,9 +1605,27 @@ public class MainFrame extends JFrame
                 return new SymbolTable.Symbol( SymbolTable.GLOBAL_SCOPE,name, SymbolTable.Symbol.Type.LABEL,result);
             }
         };
+        return new ExpressionEvaluator.NodeEvaluator( symbolResolver )
+        {
+            @Override
+            public Object evaluate(ASTNode node, boolean failOnErrors)
+            {
+                if ( node instanceof RegisterNode ) {
+                    final int reg = ((RegisterNode ) node).regNum;
+                    return driver.emulator.register[ reg ];
+                }
+                if ( node instanceof TextNode )
+                {
+                    final String value = ((TextNode) node).value;
+                    final IdentifierNode idNode = new IdentifierNode(Identifier.unsafe( value ), node.getRegion() );
+                    return evaluateIdentifier( idNode, failOnErrors );
+                }
+                return super.evaluate( node, failOnErrors );
+            }
+        };
     }
 
-    public static Integer evaluate(String expression,ISymbolResolver resolver)
+    public static Integer evaluate(String expression, ExpressionEvaluator.INodeEvaluator resolver)
     {
         final ASTNode ast = compileExpression( expression );
         if ( ast == null ) {
@@ -1619,7 +1639,7 @@ public class MainFrame extends JFrame
         }
         catch (Exception e)
         {
-            System.err.println( "Failed to evalue expression >" + expression + "<" );
+            System.err.println( "Failed to evaluate expression >" + expression + "<" );
         }
         return obj instanceof Number ? ((Number) obj).intValue() : null;
     }

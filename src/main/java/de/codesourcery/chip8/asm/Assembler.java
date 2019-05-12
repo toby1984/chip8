@@ -417,7 +417,8 @@ public class Assembler
                         {
                             for (ASTNode arg : directive.children)
                             {
-                                final Integer iValue = ExpressionEvaluator.evaluateByte( arg, compilationContext, true );
+                                final Integer iValue = ExpressionEvaluator.evaluateByte( arg,
+                                        new ExpressionEvaluator.NodeEvaluator(compilationContext), true );
                                 compilationContext.writeByte( iValue );
                             }
                         }
@@ -432,7 +433,8 @@ public class Assembler
                         {
                             for (ASTNode arg : directive.children)
                             {
-                                final Integer value = ExpressionEvaluator.evaluateWord( arg, compilationContext, true );
+                                final Integer value = ExpressionEvaluator.evaluateWord( arg,
+                                        new ExpressionEvaluator.NodeEvaluator(compilationContext), true );
                                 compilationContext.writeWord( null, value );
                             }
                         }
@@ -442,7 +444,8 @@ public class Assembler
                         }
                         break;
                     case RESERVE:
-                        final Integer value = ExpressionEvaluator.evaluateWord( directive.child( 0 ), compilationContext, true );
+                        final Integer value = ExpressionEvaluator.evaluateWord( directive.child( 0 ),
+                                new ExpressionEvaluator.NodeEvaluator(compilationContext), true );
                         if ( generateCode )
                         {
                             compilationContext.reserveBytes( value );
@@ -457,7 +460,8 @@ public class Assembler
 
         private final void visitOrigin(ASTNode node)
         {
-            Integer newAddress = ExpressionEvaluator.evaluateAddress( node.child(0), compilationContext, true );
+            Integer newAddress = ExpressionEvaluator.evaluateAddress( node.child(0),
+                    new ExpressionEvaluator.NodeEvaluator(compilationContext), true );
             if ( newAddress < compilationContext.currentAddress ) {
                 throw new RuntimeException("Cannot set origin 0x"+Integer.toHexString( newAddress )+" which is before current address (0x"+Integer.toHexString( compilationContext.currentAddress ));
             }
@@ -478,7 +482,8 @@ public class Assembler
                 if ( ((DirectiveNode) node).type == DirectiveNode.Type.EQU )
                 {
                     final IdentifierNode identifierNode = (IdentifierNode) node.child( 0 );
-                    final Object value = ExpressionEvaluator.evaluate( node.child( 1 ), compilationContext, true );
+                    final Object value = ExpressionEvaluator.evaluate( node.child( 1 ),
+                            new ExpressionEvaluator.NodeEvaluator( compilationContext ), true );
                     compilationContext.symbolTable.define( SymbolTable.GLOBAL_SCOPE, identifierNode.identifier,
                             SymbolTable.Symbol.Type.EQU, value );
                 }

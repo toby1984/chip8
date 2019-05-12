@@ -1130,9 +1130,10 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 return this == REGISTER;
             }
 
-            if ( ExpressionEvaluator.isValueNode( node, context) )
+            if ( ExpressionEvaluator.isValueNode( node ) )
             {
-                final Object value = ExpressionEvaluator.evaluate( node, context, true );
+                final Object value = ExpressionEvaluator.evaluate( node,
+                        new ExpressionEvaluator.NodeEvaluator(context), true );
                 if ( value instanceof Number)
                 {
                     int v = ((Number) value).intValue();
@@ -1581,7 +1582,8 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
             if ( node instanceof RegisterNode ) {
                 return ((RegisterNode) node).regNum;
             }
-            return ExpressionEvaluator.evaluateNumber( node,ctx,true );
+            return ExpressionEvaluator.evaluateNumber( node,
+                    new ExpressionEvaluator.NodeEvaluator(ctx),true );
         }
 
         public abstract void compile(InstructionNode instruction, Assembler.CompilationContext context);

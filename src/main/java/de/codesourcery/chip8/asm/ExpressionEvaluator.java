@@ -5,8 +5,6 @@ import de.codesourcery.chip8.asm.ast.ExpressionNode;
 import de.codesourcery.chip8.asm.ast.IdentifierNode;
 import de.codesourcery.chip8.asm.ast.NumberNode;
 import de.codesourcery.chip8.asm.ast.OperatorNode;
-import de.codesourcery.chip8.asm.ast.TextNode;
-import org.w3c.dom.Node;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +16,55 @@ import java.util.List;
  */
 public class ExpressionEvaluator
 {
-    public static boolean isValueNode(ASTNode node, ISymbolResolver context)
+    @FunctionalInterface
+    public interface INodeEvaluator
+    {
+        Object evaluate(ASTNode node,boolean failOnErrors);
+    }
+
+    public static class NodeEvaluator implements INodeEvaluator {
+
+        private final ISymbolResolver resolver;
+
+        public NodeEvaluator(ISymbolResolver resolver)
+        {
+            this.resolver = resolver;
+        }
+
+        @Override
+        public Object evaluate(ASTNode node, boolean failOnErrors)
+        {
+            if ( node instanceof IdentifierNode) {
+                return evaluateIdentifier( (IdentifierNode) node, false );
+            }
+            if ( failOnErrors ) {
+                throw new RuntimeException( "Unhandled node: "+node );
+            }
+            return null;
+        }
+
+        protected Object evaluateIdentifier(IdentifierNode node,boolean failOnErrors)
+        {
+            final Identifier id = node.identifier;
+            final SymbolTable.Symbol symbol = resolver.get( id );
+            if ( symbol != null )
+            {
+                if ( symbol.value != null ) {
+                    return symbol.value;
+                }
+                if ( failOnErrors ) {
+                    throw new RuntimeException("Symbol '"+id.value+"' @ "+node+" is declared but not defined (=no value available yet)");
+                }
+            }
+            else if ( failOnErrors )
+            {
+                throw new RuntimeException( "Unknown symbol '" + id.value + "' @ " + node );
+            }
+            return null;
+        }
+    }
+
+    public static boolean isValueNode(ASTNode node)
     {
         return node instanceof NumberNode ||
                 node instanceof IdentifierNode ||
@@ -26,7 +72,7 @@ public class ExpressionEvaluator
                 node instanceof OperatorNode;
     }
 
-    public static Integer evaluateAddress(ASTNode node,ISymbolResolver context, boolean failOnErrors)
+    public static Integer evaluateAddress(ASTNode node,INodeEvaluator context, boolean failOnErrors)
     {
         final Integer value = evaluateNumber( node, context, failOnErrors );
         if ( value != null && (value < 0 || value > 0xfff) )
@@ -36,7 +82,7 @@ public class ExpressionEvaluator
         return value;
     }
 
-    public static Integer evaluateWord(ASTNode node,ISymbolResolver context, boolean failOnErrors)
+    public static Integer evaluateWord(ASTNode node,INodeEvaluator context, boolean failOnErrors)
     {
         final Integer value = evaluateNumber( node, context, failOnErrors );
         if ( value != null && (value < 0 || value > 65535) )
@@ -46,7 +92,7 @@ public class ExpressionEvaluator
         return value;
     }
 
-    public static Integer evaluateByte(ASTNode node,ISymbolResolver context, boolean failOnErrors)
+    public static Integer evaluateByte(ASTNode node,INodeEvaluator context, boolean failOnErrors)
     {
         final Integer value = evaluateNumber( node, context, failOnErrors );
         if ( value != null && (value < 0 || value > 255) )
@@ -56,7 +102,7 @@ public class ExpressionEvaluator
         return value;
     }
 
-    public static Integer evaluateNumber(ASTNode node,ISymbolResolver context, boolean failOnErrors)
+    public static Integer evaluateNumber(ASTNode node,INodeEvaluator context, boolean failOnErrors)
     {
         Object value = evaluate(node,context,failOnErrors);
         if ( value != null ) {
@@ -68,15 +114,15 @@ public class ExpressionEvaluator
         return null;
     }
 
-    public static Object evaluate(ASTNode node,ISymbolResolver context, boolean failOnErrors)
+    public static Object evaluate(ASTNode node,INodeEvaluator context, boolean failOnErrors)
     {
-        if ( ! isValueNode( node, context) ) {
+        if ( ! isValueNode( node) ) {
             throw new IllegalArgumentException( "Not a value node: "+node );
         }
         return doEvaluate( node,context,failOnErrors );
     }
 
-    private static Object doEvaluate(ASTNode node,ISymbolResolver context,boolean failOnErrors)
+    private static Object doEvaluate(ASTNode node,INodeEvaluator context,boolean failOnErrors)
     {
         if ( node instanceof NumberNode) {
             return ((NumberNode) node).value;
@@ -99,22 +145,7 @@ public class ExpressionEvaluator
         }
         if ( node instanceof IdentifierNode )
         {
-            final Identifier id = ((IdentifierNode) node).identifier;
-            final SymbolTable.Symbol symbol = context.get( id );
-            if ( symbol != null )
-            {
-                if ( symbol.value != null ) {
-                    return symbol.value;
-                }
-                if ( failOnErrors ) {
-                    throw new RuntimeException("Symbol '"+id.value+"' @ "+node+" is declared but not defined (=no value available yet)");
-                }
-            }
-            else if ( failOnErrors )
-            {
-                throw new RuntimeException( "Unknown symbol '" + id.value + "' @ " + node );
-            }
-            return null;
+            return context.evaluate( node, failOnErrors );
         }
         throw new RuntimeException("Internal error, don't know how to evaluate "+node);
     }

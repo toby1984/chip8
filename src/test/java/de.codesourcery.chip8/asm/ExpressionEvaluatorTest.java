@@ -13,12 +13,13 @@ import static org.junit.Assert.*;
 
 public class ExpressionEvaluatorTest
 {
-    private Assembler.CompilationContext context;
+    private ExpressionEvaluator.INodeEvaluator context;
 
     @Before
     public void setup()
     {
-        context = new Assembler.CompilationContext( new ExecutableWriter(new ByteArrayOutputStream()) );
+        context = new ExpressionEvaluator.NodeEvaluator(
+                new Assembler.CompilationContext( new ExecutableWriter( new ByteArrayOutputStream() ) ) );
     }
 
     @Test
@@ -50,7 +51,6 @@ public class ExpressionEvaluatorTest
     public void testLogicalOr() {
         assertEquals( Boolean.TRUE, ExpressionEvaluator.evaluate( parse( "1==2 || 3 < 4" ), context, true ) );
     }
-
 
     @Test
     public void testBitwiseXor() {
