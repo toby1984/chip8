@@ -38,7 +38,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.time.ZonedDateTime;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -482,8 +481,7 @@ public class Assembler
                 if ( ((DirectiveNode) node).type == DirectiveNode.Type.EQU )
                 {
                     final IdentifierNode identifierNode = (IdentifierNode) node.child( 0 );
-                    final Object value = ExpressionEvaluator.evaluate( node.child( 1 ),
-                            new ExpressionEvaluator.NodeEvaluator( compilationContext ), true );
+                    final Object value = new ExpressionEvaluator.NodeEvaluator(compilationContext).evaluate(node.child(1), true);
                     compilationContext.symbolTable.define( SymbolTable.GLOBAL_SCOPE, identifierNode.identifier,
                             SymbolTable.Symbol.Type.EQU, value );
                 }

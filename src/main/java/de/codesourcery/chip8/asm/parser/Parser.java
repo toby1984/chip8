@@ -1068,38 +1068,6 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
 
         public boolean matches(ASTNode node, Assembler.CompilationContext context)
         {
-            if ( node instanceof IdentifierNode) {
-
-                final Identifier id = ((IdentifierNode) node).identifier;
-                // try local scope first
-                SymbolTable.Symbol symbol = context.symbolTable.get( context.getLastGlobalLabel() , id );
-                if ( symbol == null )
-                {
-                    // fall-back to global scope
-                    symbol = context.symbolTable.get( SymbolTable.GLOBAL_SCOPE, id );
-                }
-                if ( symbol == null ) {
-                    context.error("Unknown symbol '"+id.value+"'", node);
-                    return false;
-                }
-                Object value = symbol.value;
-                switch( symbol.type ) {
-
-                    case LABEL:
-                    case EQU:
-                        if ( value instanceof Number) {
-                            return checkNumberInRange( ((Number) value).intValue() );
-                        }
-                        return this == ADDRESS;
-                    case REGISTER_ALIAS:
-                        if ( Integer.valueOf(0).equals( symbol.value ) )
-                        {
-                            return this == REGISTER_V0 || this == REGISTER;
-                        }
-                        return this == REGISTER;
-                }
-                return false;
-            }
             if ( node instanceof TextNode )
             {
                 // first, check if this is a register alias
@@ -1130,18 +1098,61 @@ operand        → NUMBER | STRING | "false" | "true" | "nil"
                 return this == REGISTER;
             }
 
-            if ( ExpressionEvaluator.isValueNode( node ) )
+            final OperandType self = this;
+
+            // try local scope first
+            // fall-back to global scope
+            final boolean[] matched = {false};
+            final Object value = new ExpressionEvaluator.NodeEvaluator(context)
             {
-                final Object value = ExpressionEvaluator.evaluate( node,
-                        new ExpressionEvaluator.NodeEvaluator(context), true );
-                if ( value instanceof Number)
+                @Override
+                protected Object evaluateIdentifier(IdentifierNode node1, boolean failOnErrors1)
                 {
-                    int v = ((Number) value).intValue();
-                    if ( checkNumberInRange( v ) ) {
-                        return true;
+                    final Identifier id = node1.identifier;
+                    // try local scope first
+                    SymbolTable.Symbol symbol = context.symbolTable.get(context.getLastGlobalLabel(), id);
+                    if (symbol == null)
+                    {
+                        // fall-back to global scope
+                        symbol = context.symbolTable.get(SymbolTable.GLOBAL_SCOPE, id);
                     }
+                    if (symbol == null)
+                    {
+                        context.error("Unknown symbol '" + id.value + "'", node1);
+                        return null;
+                    }
+                    Object value1 = symbol.value;
+                    switch (symbol.type)
+                    {
+                        case LABEL:
+                        case EQU:
+                            matched[0] = self == ADDRESS;
+                            return value1;
+                        case REGISTER_ALIAS:
+                            if (Integer.valueOf(0).equals(symbol.value))
+                            {
+                                matched[0] = self == REGISTER_V0 || self == REGISTER;
+                                return matched[0];
+                            }
+                            matched[0] = self == REGISTER;
+                            return null;
+                    }
+                    return null;
+                }
+            }.evaluate(node, true);
+
+            if ( value instanceof Number)
+            {
+                int v = ((Number) value).intValue();
+                if ( checkNumberInRange( v ) ) {
+                    return true;
                 }
             }
+
+            if ( matched[0] ) {
+                return true;
+            }
+
             return false;
         }
 

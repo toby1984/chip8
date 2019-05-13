@@ -23,7 +23,6 @@ import de.codesourcery.chip8.asm.ExpressionEvaluator;
 import de.codesourcery.chip8.asm.ISymbolResolver;
 import de.codesourcery.chip8.asm.Identifier;
 import de.codesourcery.chip8.asm.SymbolTable;
-import de.codesourcery.chip8.asm.ast.AST;
 import de.codesourcery.chip8.asm.ast.ASTNode;
 import de.codesourcery.chip8.asm.ast.CommentNode;
 import de.codesourcery.chip8.asm.ast.DirectiveNode;
@@ -42,7 +41,6 @@ import de.codesourcery.chip8.emulator.EmulatorDriver;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 
-import javax.imageio.spi.RegisterableService;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JDesktopPane;
@@ -281,7 +279,7 @@ public class MainFrame extends JFrame
 
     private MyFrame createBreakpointsView()
     {
-        return new MyFrame( "Breakpoints", ConfigKey.BREAKPOINTS, false, false )
+        return new MyFrame( "Breakpoints", ConfigKey.BREAKPOINTS, false, true )
         {
             private final Object LOCK = new Object();
 
@@ -373,15 +371,14 @@ public class MainFrame extends JFrame
                         if ( ast != null )
                         {
                             final boolean isEnabled = driver.isEnabled( bp );
-                            final ExpressionEvaluator.INodeEvaluator resolver =
-                                    createSymbolResolver( driver );
+                            final ExpressionEvaluator.INodeEvaluator resolver = createNodeEvaluator( driver );
 
                             final Breakpoint.IMatcher newMatcher = new Breakpoint.IMatcher()
                             {
                                 @Override
                                 public boolean matches(EmulatorDriver driver)
                                 {
-                                    final Object result = ExpressionEvaluator.evaluate( ast, resolver, false );
+                                    final Object result = resolver.evaluate(ast, false);
                                     return result instanceof Boolean && (Boolean) result;
                                 }
 
@@ -400,6 +397,8 @@ public class MainFrame extends JFrame
             };
 
             private MyTableModel tableModel = new MyTableModel();
+
+            volatile EmulatorDriver.IDriverCallback bpListener;
 
             private JTable table = new JTable(tableModel);
 
@@ -428,7 +427,30 @@ public class MainFrame extends JFrame
                 } );
             }
 
-            volatile EmulatorDriver.IDriverCallback bpListener;
+
+            @Override
+            public void stateChanged(EmulatorDriver controller, EmulatorDriver.Reason reason)
+            {
+                int index = 0;
+                Breakpoint current = null;
+                synchronized( breakpoints )
+                {
+                    final int address = controller.emulator.pc;
+                    for ( var bp : breakpoints )
+                    {
+                        if (bp.address == address) {
+                            current = bp;
+                            break;
+                        }
+                        index++;
+                    }
+                }
+                if ( current != null )
+                {
+                    final int finalIdx = index;
+                    SwingUtilities.invokeLater(() -> table.getSelectionModel().setSelectionInterval(finalIdx,finalIdx));
+                }
+            }
 
             @Override
             protected void initialize(EmulatorDriver driver)
@@ -503,7 +525,7 @@ public class MainFrame extends JFrame
                         }
                         if (func != null)
                         {
-                            Integer current = evaluate(expression, createSymbolResolver( driver ) );
+                            Integer current = evaluate(expression, createNodeEvaluator( driver ) );
                             if (current != null)
                             {
                                 current = func.apply(current) % driver.emulator.memory.getSizeInBytes();
@@ -524,7 +546,7 @@ public class MainFrame extends JFrame
             @Override
             public void invoke(EmulatorDriver controller)
             {
-                final Integer adr = evaluate(expression,createSymbolResolver( controller ));
+                final Integer adr = evaluate(expression, createNodeEvaluator( controller ));
                 if ( adr != null )
                 {
                     final String text = controller.emulator.memory.dump(
@@ -586,7 +608,7 @@ public class MainFrame extends JFrame
             @Override
             public void invoke(EmulatorDriver controller)
             {
-                Integer adr = evaluate(expression,createSymbolResolver( controller ));
+                Integer adr = evaluate(expression, createNodeEvaluator( controller ));
                 if ( adr != null )
                 {
                     synchronized (data)
@@ -634,7 +656,7 @@ public class MainFrame extends JFrame
                         }
                         if (func != null)
                         {
-                            Integer current = evaluate(expression,createSymbolResolver( driver ));
+                            Integer current = evaluate(expression, createNodeEvaluator( driver ));
                             if (current != null)
                             {
                                 current = func.apply(current) % driver.emulator.memory.getSizeInBytes();
@@ -1576,7 +1598,7 @@ public class MainFrame extends JFrame
         System.exit(0);
     }
 
-    public static ExpressionEvaluator.INodeEvaluator createSymbolResolver(EmulatorDriver driver)
+    public static ExpressionEvaluator.INodeEvaluator createNodeEvaluator(EmulatorDriver driver)
     {
         final ISymbolResolver symbolResolver = new ISymbolResolver()
         {
@@ -1616,7 +1638,10 @@ public class MainFrame extends JFrame
                 }
                 if ( node instanceof TextNode )
                 {
+                    // string like "pc" , "v0" etc. are considered reserved words and thus are never
+                    // valid identifiers ; the lexer will turn these into Token.Type.TEXT and not Token.Type.IDENTIFIER
                     final String value = ((TextNode) node).value;
+                    // convert into IdentifierNode and then use evaluateIdentifier() to interpret it
                     final IdentifierNode idNode = new IdentifierNode(Identifier.unsafe( value ), node.getRegion() );
                     return evaluateIdentifier( idNode, failOnErrors );
                 }
@@ -1625,7 +1650,7 @@ public class MainFrame extends JFrame
         };
     }
 
-    public static Integer evaluate(String expression, ExpressionEvaluator.INodeEvaluator resolver)
+    public static Integer evaluate(String expression, ExpressionEvaluator.INodeEvaluator evaluator)
     {
         final ASTNode ast = compileExpression( expression );
         if ( ast == null ) {
@@ -1635,10 +1660,11 @@ public class MainFrame extends JFrame
         Object obj = null;
         try
         {
-            obj = ExpressionEvaluator.evaluate( ast, resolver, true );
+            obj = evaluator.evaluate(ast, true);
         }
         catch (Exception e)
         {
+            e.printStackTrace();
             System.err.println( "Failed to evaluate expression >" + expression + "<" );
         }
         return obj instanceof Number ? ((Number) obj).intValue() : null;
@@ -1656,39 +1682,6 @@ public class MainFrame extends JFrame
             ctx.messages.stream().forEach( System.err::println );
             return null;
         }
-
-        // Lexer will lex all reserved words (which also include register names)
-        // as TokenType#TEXT instead of TokenType#IDENTIFIER
-        // Rewrite those AST nodes to be identifiers so that ExpressionEvaluator#evaluate()
-        // will invoke our custom ISymbolResolver to resolve them
-
-        final Function<ASTNode,ASTNode> mapper = node ->
-        {
-            if ( node instanceof TextNode )
-            {
-                final TextNode tn = (TextNode) node;
-                if ( Identifier.ID.matcher( tn.value ).matches() )
-                {
-                    return new IdentifierNode( Identifier.unsafe(tn.value), tn.getRegion() );
-                }
-            }
-            return node;
-        };
-        if ( ast instanceof TextNode) {
-            ast = mapper.apply( ast );
-        }
-        else
-        {
-            ast.visitInOrder( (node, depth) ->
-            {
-                ASTNode mapped = mapper.apply( node );
-                if ( mapped != node )
-                {
-                    node.replaceWith( mapped );
-                }
-            } );
-        }
-
         System.out.println("Parsed >"+expression+"<");
         System.out.println( ast.toPrettyString() );
         return ast;

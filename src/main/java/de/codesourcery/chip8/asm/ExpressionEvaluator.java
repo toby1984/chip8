@@ -31,16 +31,32 @@ public class ExpressionEvaluator
             this.resolver = resolver;
         }
 
-        @Override
-        public Object evaluate(ASTNode node, boolean failOnErrors)
+        public Object evaluate(ASTNode node,boolean failOnErrors)
         {
-            if ( node instanceof IdentifierNode) {
-                return evaluateIdentifier( (IdentifierNode) node, false );
+            if ( node instanceof NumberNode) {
+                return ((NumberNode) node).value;
             }
-            if ( failOnErrors ) {
-                throw new RuntimeException( "Unhandled node: "+node );
+            if ( node instanceof OperatorNode )
+            {
+                final List<Object> values = new ArrayList<>();
+                for ( ASTNode child : node.children )
+                {
+                    values.add( evaluate( child, failOnErrors) );
+                }
+                return ((OperatorNode) node).operator.evaluate( values );
             }
-            return null;
+            if ( node instanceof ExpressionNode)
+            {
+                if ( node.childCount() == 0 ) {
+                    throw new RuntimeException("Expression "+node+" has no children ?");
+                }
+                return evaluate( node.child(0), failOnErrors );
+            }
+            if ( node instanceof IdentifierNode )
+            {
+                return evaluateIdentifier( (IdentifierNode) node, failOnErrors );
+            }
+            throw new RuntimeException("Internal error, don't know how to evaluate "+node);
         }
 
         protected Object evaluateIdentifier(IdentifierNode node,boolean failOnErrors)
@@ -62,14 +78,6 @@ public class ExpressionEvaluator
             }
             return null;
         }
-    }
-
-    public static boolean isValueNode(ASTNode node)
-    {
-        return node instanceof NumberNode ||
-                node instanceof IdentifierNode ||
-                node instanceof ExpressionNode ||
-                node instanceof OperatorNode;
     }
 
     public static Integer evaluateAddress(ASTNode node,INodeEvaluator context, boolean failOnErrors)
@@ -104,7 +112,7 @@ public class ExpressionEvaluator
 
     public static Integer evaluateNumber(ASTNode node,INodeEvaluator context, boolean failOnErrors)
     {
-        Object value = evaluate(node,context,failOnErrors);
+        Object value = context.evaluate(node, failOnErrors);
         if ( value != null ) {
             if ( !(value instanceof Number) ) {
                 throw new RuntimeException("Expected a number but got "+value+" @ "+node);
@@ -114,39 +122,4 @@ public class ExpressionEvaluator
         return null;
     }
 
-    public static Object evaluate(ASTNode node,INodeEvaluator context, boolean failOnErrors)
-    {
-        if ( ! isValueNode( node) ) {
-            throw new IllegalArgumentException( "Not a value node: "+node );
-        }
-        return doEvaluate( node,context,failOnErrors );
-    }
-
-    private static Object doEvaluate(ASTNode node,INodeEvaluator context,boolean failOnErrors)
-    {
-        if ( node instanceof NumberNode) {
-            return ((NumberNode) node).value;
-        }
-        if ( node instanceof OperatorNode )
-        {
-            final List<Object> values = new ArrayList<>();
-            for ( ASTNode child : node.children )
-            {
-                values.add( doEvaluate( child, context, failOnErrors) );
-            }
-            return ((OperatorNode) node).operator.evaluate( values );
-        }
-        if ( node instanceof ExpressionNode)
-        {
-            if ( node.childCount() == 0 ) {
-                throw new RuntimeException("Expression "+node+" has no children ?");
-            }
-            return doEvaluate( node.child(0), context, failOnErrors );
-        }
-        if ( node instanceof IdentifierNode )
-        {
-            return context.evaluate( node, failOnErrors );
-        }
-        throw new RuntimeException("Internal error, don't know how to evaluate "+node);
-    }
 }
