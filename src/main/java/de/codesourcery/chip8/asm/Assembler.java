@@ -404,6 +404,12 @@ public class Assembler
                     case ALIAS:
                         final RegisterNode regNode = (RegisterNode) node.child( 0 );
                         final IdentifierNode idNode = (IdentifierNode) node.child( 1 );
+                        final SymbolTable.Symbol existing = compilationContext.symbolTable.get(compilationContext.getLastGlobalLabel(),
+                            idNode.identifier);
+                        if ( existing != null && ! existing.hasType(SymbolTable.Symbol.Type.REGISTER_ALIAS ) )
+                        {
+                            compilationContext.error(".alias "+idNode.identifier.value+" clashes with existing symbol "+existing,idNode);
+                        }
                         compilationContext.symbolTable.redefine( compilationContext.getLastGlobalLabel(),
                                 idNode.identifier,
                                 SymbolTable.Symbol.Type.REGISTER_ALIAS, regNode.regNum );
@@ -432,9 +438,17 @@ public class Assembler
                         {
                             for (ASTNode arg : directive.children)
                             {
-                                final Integer value = ExpressionEvaluator.evaluateWord( arg,
-                                        new ExpressionEvaluator.NodeEvaluator(compilationContext), true );
-                                compilationContext.writeWord( null, value );
+                                try
+                                {
+                                    final Integer value = ExpressionEvaluator.evaluateWord(arg,
+                                        new ExpressionEvaluator.NodeEvaluator(compilationContext), true);
+                                    compilationContext.writeWord(null, value);
+                                }
+                                catch(Exception e)
+                                {
+                                    e.printStackTrace();
+                                    compilationContext.error( e.getMessage(), arg);
+                                }
                             }
                         }
                         else

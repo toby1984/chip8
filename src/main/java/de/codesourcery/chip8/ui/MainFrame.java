@@ -58,6 +58,7 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.event.ChangeEvent;
@@ -69,6 +70,7 @@ import javax.swing.event.HyperlinkListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.BadLocationException;
 import javax.swing.text.StyledDocument;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -80,6 +82,7 @@ import java.awt.Graphics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -87,6 +90,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.geom.Rectangle2D;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -426,7 +430,6 @@ public class MainFrame extends JFrame
                     }
                 } );
             }
-
 
             @Override
             public void stateChanged(EmulatorDriver controller, EmulatorDriver.Reason reason)
@@ -1169,21 +1172,37 @@ public class MainFrame extends JFrame
 
                 // JTable constructor...
                 {
-                    getSelectionModel().addListSelectionListener( new ListSelectionListener()
+                    addMouseListener(new MouseAdapter()
                     {
                         @Override
-                        public void valueChanged(ListSelectionEvent e)
+                        public void mouseClicked(MouseEvent e)
                         {
-                            final int idx = e.getFirstIndex();
-                            final CompilationMessages.CompilationMessage message =
-                                    idx < messages.size() ? messages.get( idx ) : null;
-                            if ( message != null && message.offset >= 0 )
+                            if ( e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON1 )
                             {
-                                source.setCaretPosition( message.offset );
-                                source.requestFocus();
+                                final int idx = table.rowAtPoint(e.getPoint());
+                                System.out.println("Clicked @ list item "+idx);
+                                final CompilationMessages.CompilationMessage message = idx < messages.size() ? messages.get( idx ) : null;
+                                if ( message != null && message.offset >= 0 )
+                                {
+                                    System.out.println("Jumping to caret position "+message.offset);
+                                    try
+                                    {
+                                        final Rectangle2D rect = source.modelToView2D(message.offset);
+                                        final Rectangle rect2 = new Rectangle((int)rect.getX(), (int)rect.getY(), (int)rect.getWidth(), (int)rect.getHeight());
+                                        source.requestFocusInWindow();
+                                        source.scrollRectToVisible(rect2);
+                                        source.setCaretPosition( message.offset );
+                                    }
+                                    catch (BadLocationException ex)
+                                    {
+                                        ex.printStackTrace();
+                                    }
+                                }
                             }
                         }
                     });
+                    setFocusable(false);
+                    setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
                 }
             };
 
@@ -1197,6 +1216,8 @@ public class MainFrame extends JFrame
                 document().addStyle( "defaultStyle", null );
 
                 configure(source);
+
+                table.setFocusable(false);
 
                 highlightThread = new Thread(() ->
                 {
